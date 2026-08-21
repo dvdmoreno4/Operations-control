@@ -1,11 +1,27 @@
-<div align="center">
+# Operations Control
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Next.js app (App Router, TypeScript, Tailwind CSS v4).
 
-  <h1>Built with AI Studio</h2>
+## Desarrollo
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+```bash
+npm install
+npm run dev
+```
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+Abrir [http://localhost:3000](http://localhost:3000).
 
-</div>
+## Build
+
+```bash
+npm run build
+npm start
+```
+
+## Deploy en Vercel
+
+1. Importar el repo `erickmorenocode/Operations-control` en [vercel.com/new](https://vercel.com/new).
+2. Framework preset: **Next.js** (autodetectado).
+3. Build command: `next build` (default). Output: managed por Vercel (no usar `output: export`).
+4. Si el proyecto usa variables de entorno, definirlas en Project Settings → Environment Variables (no commitear `.env*`).
+5. Deploy automático en cada push a `main`.
