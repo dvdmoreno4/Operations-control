@@ -2,15 +2,15 @@ import Image from 'next/image';
 import { useState } from 'react';
 import logo from '@/Logo.png';
 import { LoginGate } from './components/LoginGate';
-import { OperationsTab } from './components/OperationsTab';
+import { PlanTab } from './components/plan/PlanTab';
 import { cn } from './lib/cn';
 
-const TABS = [{ key: 'operations', label: 'Operaciones' }] as const;
+const TABS = [{ key: 'plan', label: 'Plano de planta' }] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>('operations');
+  const [activeTab, setActiveTab] = useState<TabKey>('plan');
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -38,7 +38,7 @@ export default function App() {
       </div>
 
       <main className="flex-1 w-full p-4 sm:p-6 max-w-[1600px] mx-auto">
-        <LoginGate>{(logout) => activeTab === 'operations' && <OperationsTab onLogout={logout} />}</LoginGate>
+        <LoginGate>{(logout) => activeTab === 'plan' && <PlanTab onLogout={logout} />}</LoginGate>
       </main>
 
       <footer className="border-t border-border p-6 mt-12 glass" />

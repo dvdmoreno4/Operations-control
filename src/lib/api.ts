@@ -62,6 +62,40 @@ export function parseDate(value: unknown, field: string): string {
   return value as string;
 }
 
+export function parseNumber(
+  value: unknown,
+  field: string,
+  { min = -Infinity, max = Infinity, integer = false }: { min?: number; max?: number; integer?: boolean } = {},
+): number {
+  const number = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  if (typeof number !== 'number' || !Number.isFinite(number)) throw new ApiError(400, `${field} debe ser un número`);
+  if (integer && !Number.isInteger(number)) throw new ApiError(400, `${field} debe ser un número entero`);
+  if (number < min || number > max) {
+    const range = max === Infinity ? `mayor o igual a ${min}` : `entre ${min} y ${max}`;
+    throw new ApiError(400, `${field} debe estar ${range}`);
+  }
+  return number;
+}
+
+export function parseText(value: unknown, field: string, { required = false, max = 80 } = {}): string {
+  const text = typeof value === 'string' ? value.trim() : value === undefined || value === null ? '' : null;
+  if (text === null) throw new ApiError(400, `${field} no es válido`);
+  if (required && !text) throw new ApiError(400, `${field} es obligatorio`);
+  if (text.length > max) throw new ApiError(400, `${field} admite como máximo ${max} caracteres`);
+  return text;
+}
+
+/** Accepts YYYY-MM and returns the first day of that month as YYYY-MM-01. */
+export function parsePeriod(value: unknown): string {
+  if (typeof value !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) throw new ApiError(400, 'El periodo no es válido');
+  return `${value}-01`;
+}
+
+export function parseUuid(value: string, notFound: string): string {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) throw new ApiError(404, notFound);
+  return value;
+}
+
 export function parsePositive(value: unknown, field: string): number {
   const number = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
   if (typeof number !== 'number' || !Number.isFinite(number) || number <= 0) {
