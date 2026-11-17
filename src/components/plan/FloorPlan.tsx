@@ -2,6 +2,9 @@ import type { KeyboardEvent } from 'react';
 import { DEPARTMENTS, STATIONS, ZONES, type DepartmentKey } from '../../lib/floorplan';
 import type { Member } from '../../lib/kpis';
 
+/** SVG viewBox of the plan. StationPopover uses it to place itself over a station. */
+export const PLAN_VIEWBOX = { x: -8, y: -8, width: 356, height: 286 };
+
 const ACTIVE_COLOR = '#22c55e';
 const INACTIVE_COLOR = '#94a3b8';
 const BLUR_FILTER_ID = 'inactive-station-blur';
@@ -23,7 +26,9 @@ export function FloorPlan({ membersByStation, selectedStationId, highlighted, on
   }
 
   return (
-    <svg viewBox="-8 -8 356 286" className="w-full h-auto select-none" role="group" aria-label="Plano de planta">
+    <svg
+      viewBox={`${PLAN_VIEWBOX.x} ${PLAN_VIEWBOX.y} ${PLAN_VIEWBOX.width} ${PLAN_VIEWBOX.height}`}
+      className="block w-full h-auto select-none" role="group" aria-label="Plano de planta">
       <defs>
         <BlurFilter />
       </defs>

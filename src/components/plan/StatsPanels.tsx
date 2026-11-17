@@ -1,10 +1,9 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
-import { api } from '../../lib/apiClient';
+import type { ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { DEPARTMENTS, DEPARTMENT_KEYS, type DepartmentKey } from '../../lib/floorplan';
-import { compliance, SCORE_SEGMENTS, type Member } from '../../lib/kpis';
+import { compliance, SCORE_SEGMENTS } from '../../lib/kpis';
 import { groupStats, rankInDepartment, statsOfDepartment, type GroupStats, type StationStat } from '../../lib/stats';
-import { Field, inputClass, money, primaryButton, secondaryButton, SignedMoney, TableFrame, Td, Th } from '../ui';
+import { inputClass, money, secondaryButton, SignedMoney, TableFrame, Td, Th } from '../ui';
 import { monthLabel } from './MemberPanel';
 
 type Props = {
@@ -17,9 +16,8 @@ type Props = {
   selectedStationId: string | null;
   onSelectStation: (stationId: string) => void;
   loading: boolean;
-  /** Reloads members and KPIs after a change. */
-  onChanged: () => Promise<void>;
-  onError: (error: unknown) => void;
+  /** Opens the edit popover of a station on the plan. */
+  onEditStation: (stationId: string) => void;
 };
 
 export function StatsPanels(props: Props) {
@@ -218,70 +216,7 @@ function DepartmentComparison({ stats, onDepartment }: { stats: StationStat[]; o
   );
 }
 
-/** Edits the name and role of the station's member, or assigns one when the station is empty. */
-function IdentityForm({
-  stationId,
-  member,
-  onDone,
-  onChanged,
-  onError,
-}: {
-  stationId: string;
-  member: Member | undefined;
-  onDone: () => void;
-  onChanged: () => Promise<void>;
-  onError: (error: unknown) => void;
-}) {
-  const [name, setName] = useState(member?.name ?? '');
-  const [role, setRole] = useState(member?.role ?? '');
-  const [busy, setBusy] = useState(false);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    try {
-      if (member) await api(`/api/members/${member.id}`, 'PATCH', { name, role });
-      else await api('/api/members', 'POST', { stationId, name, role });
-      await onChanged();
-      onDone();
-    } catch (e) {
-      onError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-3 rounded-lg border border-border p-3">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Nombre">
-          <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required autoFocus />
-        </Field>
-        <Field label="Cargo">
-          <input className={inputClass} value={role} onChange={(e) => setRole(e.target.value)} maxLength={80} />
-        </Field>
-      </div>
-      <div className="flex gap-2">
-        <button type="submit" className={primaryButton} disabled={busy || !name.trim()}>
-          {busy ? 'Guardando...' : member ? 'Guardar' : 'Asignar miembro'}
-        </button>
-        {member && (
-          <button type="button" className={secondaryButton} onClick={onDone}>
-            Cancelar
-          </button>
-        )}
-      </div>
-    </form>
-  );
-}
-
-function SelectedStation(props: Props) {
-  // Remount per station so an open form never carries over to another station.
-  return <SelectedStationBody key={props.selectedStationId ?? 'none'} {...props} />;
-}
-
-function SelectedStationBody({ stats, selectedStationId, period, loading, onChanged, onError }: Props) {
-  const [editing, setEditing] = useState(false);
+function SelectedStation({ stats, selectedStationId, period, loading, onEditStation }: Props) {
   const stat = stats.find((s) => s.station.id === selectedStationId);
   if (!stat) {
     return (
@@ -312,22 +247,12 @@ function SelectedStationBody({ stats, selectedStationId, period, loading, onChan
             </p>
           </div>
         </div>
-        {stat.member && !editing && (
-          <button type="button" className={secondaryButton} onClick={() => setEditing(true)}>
-            Editar
+        {!loading && (
+          <button type="button" className={secondaryButton} onClick={() => onEditStation(stat.station.id)}>
+            {stat.member ? 'Editar' : 'Asignar'}
           </button>
         )}
       </div>
-
-      {(editing || (!loading && !stat.member)) && (
-        <IdentityForm
-          stationId={stat.station.id}
-          member={stat.member}
-          onDone={() => setEditing(false)}
-          onChanged={onChanged}
-          onError={onError}
-        />
-      )}
 
       {loading || !stat.member ? null : !stat.record ? (
         <p className="text-sm text-ink/60">Sin KPIs registrados{period ? ` en ${monthLabel(period)}` : ''}.</p>

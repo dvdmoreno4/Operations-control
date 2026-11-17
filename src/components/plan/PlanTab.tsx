@@ -7,6 +7,7 @@ import { stationStats, type PeriodKpis } from '../../lib/stats';
 import { Alert, secondaryButton } from '../ui';
 import { FloorPlan, Legend } from './FloorPlan';
 import { MemberPanel } from './MemberPanel';
+import { StationPopover } from './StationPopover';
 import { StatsPanels } from './StatsPanels';
 
 export function PlanTab({ onLogout }: { onLogout: () => Promise<void> }) {
@@ -15,6 +16,8 @@ export function PlanTab({ onLogout }: { onLogout: () => Promise<void> }) {
   /** Month picked in the stats panel. Null means the most recent month with data. */
   const [period, setPeriod] = useState<string | null>(null);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
+  /** Station whose edit popover is open on the plan. */
+  const [popoverStationId, setPopoverStationId] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<DepartmentKey | null>(null);
   const [error, setError] = useState('');
 
@@ -55,6 +58,13 @@ export function PlanTab({ onLogout }: { onLogout: () => Promise<void> }) {
     await Promise.all([loadMembers(), loadKpis()]);
   }, [loadMembers, loadKpis]);
 
+  /** Selects a station and opens its edit popover on the plan. */
+  const openStation = useCallback((stationId: string) => {
+    setSelectedStationId(stationId);
+    setPopoverStationId(stationId);
+  }, []);
+  const closePopover = useCallback(() => setPopoverStationId(null), []);
+
   const membersByStation = useMemo(() => new Map((members ?? []).map((m) => [m.stationId, m])), [members]);
   const stats = useMemo(() => stationStats(members ?? [], kpis?.records ?? []), [members, kpis]);
   const occupied = members?.length ?? 0;
@@ -92,12 +102,24 @@ export function PlanTab({ onLogout }: { onLogout: () => Promise<void> }) {
               </p>
             </header>
 
-            <FloorPlan
-              membersByStation={membersByStation}
-              selectedStationId={selectedStationId}
-              highlighted={highlighted}
-              onSelect={setSelectedStationId}
-            />
+            <div className="relative">
+              <FloorPlan
+                membersByStation={membersByStation}
+                selectedStationId={selectedStationId}
+                highlighted={highlighted}
+                onSelect={openStation}
+              />
+              {popoverStationId && (
+                <StationPopover
+                  key={popoverStationId}
+                  stationId={popoverStationId}
+                  member={membersByStation.get(popoverStationId)}
+                  onClose={closePopover}
+                  onChanged={reload}
+                  onError={handleError}
+                />
+              )}
+            </div>
 
             <Legend highlighted={highlighted} onToggle={(key) => setHighlighted((current) => (current === key ? null : key))} />
           </section>
@@ -128,8 +150,7 @@ export function PlanTab({ onLogout }: { onLogout: () => Promise<void> }) {
             selectedStationId={selectedStationId}
             onSelectStation={setSelectedStationId}
             loading={members === null || kpis === null}
-            onChanged={reload}
-            onError={handleError}
+            onEditStation={openStation}
           />
         </aside>
       </div>
