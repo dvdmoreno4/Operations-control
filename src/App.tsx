@@ -38,7 +38,7 @@ export default function App() {
       </div>
 
       <main className="flex-1 w-full p-4 sm:p-6 max-w-[1600px] mx-auto">
-        <LoginGate>{(logout) => activeTab === 'plan' && <PlanTab onLogout={logout} />}</LoginGate>
+        <LoginGate>{({ logout, admin }) => activeTab === 'plan' && <PlanTab onLogout={logout} admin={admin} />}</LoginGate>
       </main>
 
       <footer className="border-t border-border p-6 mt-12 glass" />

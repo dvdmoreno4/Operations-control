@@ -2,7 +2,10 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, errorMessage } from '../lib/apiClient';
 import { Alert, Field, inputClass, primaryButton } from './ui';
 
-function LoginForm({ onLoggedIn }: { onLoggedIn: () => void }) {
+/** What children of LoginGate get: logout and whether the session is admin. */
+export type Session = { logout: () => Promise<void>; admin: boolean };
+
+function LoginForm({ onLoggedIn }: { onLoggedIn: (admin: boolean) => void }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -12,8 +15,7 @@ function LoginForm({ onLoggedIn }: { onLoggedIn: () => void }) {
     setBusy(true);
     setError('');
     try {
-      await api('/api/auth', 'POST', { password });
-      onLoggedIn();
+      onLoggedIn((await api<{ admin: boolean }>('/api/auth', 'POST', { password })).admin);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -24,7 +26,7 @@ function LoginForm({ onLoggedIn }: { onLoggedIn: () => void }) {
   return (
     <form onSubmit={submit} className="glass rounded-xl p-6 space-y-4 max-w-sm mx-auto mt-12">
       <h2 className="text-lg font-semibold tracking-tight">Acceso</h2>
-      <Field label="Clave compartida">
+      <Field label="Clave (compartida o de administrador)">
         <input className={inputClass} type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus required />
       </Field>
       {error && <p role="alert" className="text-xs text-danger">{error}</p>}
@@ -35,33 +37,34 @@ function LoginForm({ onLoggedIn }: { onLoggedIn: () => void }) {
   );
 }
 
-/** Renders children only with a valid session; children get a logout callback. */
-export function LoginGate({ children }: { children: (logout: () => Promise<void>) => ReactNode }) {
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+/** Renders children only with a valid session; children get logout and the admin flag. */
+export function LoginGate({ children }: { children: (session: Session) => ReactNode }) {
+  /** null while loading, false when logged out, otherwise the role. */
+  const [state, setState] = useState<null | false | { admin: boolean }>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api<{ authenticated: boolean }>('/api/auth')
-      .then((session) => setAuthenticated(session.authenticated))
+    api<{ authenticated: boolean; admin: boolean }>('/api/auth')
+      .then((session) => setState(session.authenticated ? { admin: session.admin } : false))
       .catch((e) => {
-        setAuthenticated(false);
+        setState(false);
         setError(errorMessage(e));
       });
   }, []);
 
   async function logout() {
     await api('/api/auth', 'DELETE').catch(() => undefined);
-    setAuthenticated(false);
+    setState(false);
   }
 
-  if (authenticated === null) return <p className="text-sm text-ink/60 p-6">Cargando...</p>;
-  if (!authenticated) {
+  if (state === null) return <p className="text-sm text-ink/60 p-6">Cargando...</p>;
+  if (state === false) {
     return (
       <>
         {error && <Alert>{error}</Alert>}
-        <LoginForm onLoggedIn={() => setAuthenticated(true)} />
+        <LoginForm onLoggedIn={(admin) => setState({ admin })} />
       </>
     );
   }
-  return <>{children(logout)}</>;
+  return <>{children({ logout, admin: state.admin })}</>;
 }

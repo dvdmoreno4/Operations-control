@@ -1,6 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { isAuthConfigured, isValidSessionToken, SESSION_COOKIE } from './session';
+import { isAuthConfigured, isValidSessionToken, sessionRole, SESSION_COOKIE } from './session';
 import { supabaseAdmin } from './supabase';
+
+export const isAdminRequest = (req: NextRequest) => sessionRole(req.cookies.get(SESSION_COOKIE)?.value) === 'admin';
+
+/** Throws 403 unless the request carries an admin session. Use inside a `route()` handler. */
+export function requireAdmin(req: NextRequest) {
+  if (!isAdminRequest(req)) throw new ApiError(403, 'Solo un administrador puede hacer esto');
+}
 
 export class ApiError extends Error {
   constructor(

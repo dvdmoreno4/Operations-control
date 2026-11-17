@@ -10,7 +10,7 @@ import { MemberPanel } from './MemberPanel';
 import { StationPopover } from './StationPopover';
 import { StatsPanels } from './StatsPanels';
 
-export function PlanTab({ onLogout }: { onLogout: () => Promise<void> }) {
+export function PlanTab({ onLogout, admin }: { onLogout: () => Promise<void>; admin: boolean }) {
   const [members, setMembers] = useState<Member[] | null>(null);
   const [kpis, setKpis] = useState<PeriodKpis | null>(null);
   /** Month picked in the stats panel. Null means the most recent month with data. */
@@ -128,6 +128,7 @@ export function PlanTab({ onLogout }: { onLogout: () => Promise<void> }) {
             stationId={selectedStationId}
             member={selectedStationId ? membersByStation.get(selectedStationId) : undefined}
             members={members ?? []}
+            admin={admin}
             onChanged={reload}
             onError={handleError}
           />

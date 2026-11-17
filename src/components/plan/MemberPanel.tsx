@@ -3,6 +3,7 @@ import { api } from '../../lib/apiClient';
 import { DEPARTMENTS, STATIONS, findStation } from '../../lib/floorplan';
 import { compliance, EMPTY_KPIS, SCORE_SEGMENTS, totalScore, type KpiRecord, type KpiValues, type Member } from '../../lib/kpis';
 import { Field, inputClass, money, primaryButton, secondaryButton, SignedMoney, SignedPercent, TableFrame, Td, Th } from '../ui';
+import { ProjectsSection } from './ProjectsSection';
 import { ScoreBar } from './ScoreBar';
 
 type Shared = { onChanged: () => Promise<void>; onError: (error: unknown) => void };
@@ -16,8 +17,9 @@ export function MemberPanel({
   stationId,
   member,
   members,
+  admin,
   ...shared
-}: Shared & { stationId: string | null; member: Member | undefined; members: Member[] }) {
+}: Shared & { stationId: string | null; member: Member | undefined; members: Member[]; admin: boolean }) {
   if (!stationId) {
     return (
       <section className="glass rounded-xl p-6 text-sm text-ink/60">
@@ -35,7 +37,7 @@ export function MemberPanel({
         {department?.label} · Estación {stationId}
       </header>
       {member ? (
-        <MemberFile key={member.id} member={member} members={members} {...shared} />
+        <MemberFile key={member.id} member={member} members={members} admin={admin} {...shared} />
       ) : (
         <AssignForm key={stationId} stationId={stationId} {...shared} />
       )}
@@ -80,7 +82,7 @@ function AssignForm({ stationId, onChanged, onError }: Shared & { stationId: str
   );
 }
 
-function MemberFile({ member, members, onChanged, onError }: Shared & { member: Member; members: Member[] }) {
+function MemberFile({ member, members, admin, onChanged, onError }: Shared & { member: Member; members: Member[]; admin: boolean }) {
   const [editing, setEditing] = useState(false);
   const [records, setRecords] = useState<KpiRecord[] | null>(null);
   const [period, setPeriod] = useState(member.latestPeriod ?? currentMonth());
@@ -154,6 +156,8 @@ function MemberFile({ member, members, onChanged, onError }: Shared & { member: 
           <History records={records} selected={period} onSelect={setPeriod} />
         </>
       )}
+
+      <ProjectsSection memberId={member.id} period={period} admin={admin} onError={onError} />
     </div>
   );
 }
