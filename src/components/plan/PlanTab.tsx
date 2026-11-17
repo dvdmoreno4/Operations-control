@@ -128,6 +128,8 @@ export function PlanTab({ onLogout }: { onLogout: () => Promise<void> }) {
             selectedStationId={selectedStationId}
             onSelectStation={setSelectedStationId}
             loading={members === null || kpis === null}
+            onChanged={reload}
+            onError={handleError}
           />
         </aside>
       </div>

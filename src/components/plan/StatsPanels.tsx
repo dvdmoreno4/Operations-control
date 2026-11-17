@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { api } from '../../lib/apiClient';
 import { cn } from '../../lib/cn';
 import { DEPARTMENTS, DEPARTMENT_KEYS, type DepartmentKey } from '../../lib/floorplan';
-import { compliance, SCORE_SEGMENTS } from '../../lib/kpis';
+import { compliance, SCORE_SEGMENTS, type Member } from '../../lib/kpis';
 import { groupStats, rankInDepartment, statsOfDepartment, type GroupStats, type StationStat } from '../../lib/stats';
-import { inputClass, money, SignedMoney, TableFrame, Td, Th } from '../ui';
+import { Field, inputClass, money, primaryButton, secondaryButton, SignedMoney, TableFrame, Td, Th } from '../ui';
 import { monthLabel } from './MemberPanel';
 
 type Props = {
@@ -16,6 +17,9 @@ type Props = {
   selectedStationId: string | null;
   onSelectStation: (stationId: string) => void;
   loading: boolean;
+  /** Reloads members and KPIs after a change. */
+  onChanged: () => Promise<void>;
+  onError: (error: unknown) => void;
 };
 
 export function StatsPanels(props: Props) {
@@ -214,7 +218,70 @@ function DepartmentComparison({ stats, onDepartment }: { stats: StationStat[]; o
   );
 }
 
-function SelectedStation({ stats, selectedStationId, period, loading }: Props) {
+/** Edits the name and role of the station's member, or assigns one when the station is empty. */
+function IdentityForm({
+  stationId,
+  member,
+  onDone,
+  onChanged,
+  onError,
+}: {
+  stationId: string;
+  member: Member | undefined;
+  onDone: () => void;
+  onChanged: () => Promise<void>;
+  onError: (error: unknown) => void;
+}) {
+  const [name, setName] = useState(member?.name ?? '');
+  const [role, setRole] = useState(member?.role ?? '');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      if (member) await api(`/api/members/${member.id}`, 'PATCH', { name, role });
+      else await api('/api/members', 'POST', { stationId, name, role });
+      await onChanged();
+      onDone();
+    } catch (e) {
+      onError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3 rounded-lg border border-border p-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="Nombre">
+          <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required autoFocus />
+        </Field>
+        <Field label="Cargo">
+          <input className={inputClass} value={role} onChange={(e) => setRole(e.target.value)} maxLength={80} />
+        </Field>
+      </div>
+      <div className="flex gap-2">
+        <button type="submit" className={primaryButton} disabled={busy || !name.trim()}>
+          {busy ? 'Guardando...' : member ? 'Guardar' : 'Asignar miembro'}
+        </button>
+        {member && (
+          <button type="button" className={secondaryButton} onClick={onDone}>
+            Cancelar
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
+function SelectedStation(props: Props) {
+  // Remount per station so an open form never carries over to another station.
+  return <SelectedStationBody key={props.selectedStationId ?? 'none'} {...props} />;
+}
+
+function SelectedStationBody({ stats, selectedStationId, period, loading, onChanged, onError }: Props) {
+  const [editing, setEditing] = useState(false);
   const stat = stats.find((s) => s.station.id === selectedStationId);
   if (!stat) {
     return (
@@ -232,22 +299,37 @@ function SelectedStation({ stats, selectedStationId, period, loading }: Props) {
 
   return (
     <Panel title="Puesto seleccionado">
-      <div className="flex items-start gap-2">
-        <span className="mt-1.5 size-2.5 shrink-0 rounded-sm" style={{ backgroundColor: department.color }} />
-        <div>
-          <p className="text-sm font-semibold">
-            Estación {stat.station.id}
-            <span className="font-normal text-ink/60"> · {department.short}</span>
-          </p>
-          <p className="text-xs text-ink/70">
-            {stat.member ? `${stat.member.name}${stat.member.role ? ` · ${stat.member.role}` : ''}` : 'Estación vacía'}
-          </p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2">
+          <span className="mt-1.5 size-2.5 shrink-0 rounded-sm" style={{ backgroundColor: department.color }} />
+          <div>
+            <p className="text-sm font-semibold">
+              Estación {stat.station.id}
+              <span className="font-normal text-ink/60"> · {department.short}</span>
+            </p>
+            <p className="text-xs text-ink/70">
+              {stat.member ? `${stat.member.name}${stat.member.role ? ` · ${stat.member.role}` : ''}` : 'Estación inactiva'}
+            </p>
+          </div>
         </div>
+        {stat.member && !editing && (
+          <button type="button" className={secondaryButton} onClick={() => setEditing(true)}>
+            Editar
+          </button>
+        )}
       </div>
 
-      {loading ? null : !stat.member ? (
-        <p className="text-sm text-ink/60">Sin miembro asignado. Asígnalo desde el expediente debajo del plano.</p>
-      ) : !stat.record ? (
+      {(editing || (!loading && !stat.member)) && (
+        <IdentityForm
+          stationId={stat.station.id}
+          member={stat.member}
+          onDone={() => setEditing(false)}
+          onChanged={onChanged}
+          onError={onError}
+        />
+      )}
+
+      {loading || !stat.member ? null : !stat.record ? (
         <p className="text-sm text-ink/60">Sin KPIs registrados{period ? ` en ${monthLabel(period)}` : ''}.</p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
