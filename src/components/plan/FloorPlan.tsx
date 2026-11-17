@@ -66,23 +66,51 @@ export function FloorPlan({ membersByStation, selectedStationId, highlighted, on
             aria-pressed={selected}
             onClick={() => onSelect(station.id)}
             onKeyDown={(event) => onKey(event, station.id)}
-            className="cursor-pointer outline-none [&:focus-visible>circle:last-child]:stroke-[#facc15]"
+            className="group cursor-pointer outline-none"
             opacity={dimmed ? 0.35 : 1}
           >
             <title>{label}</title>
-            {selected && <circle cx={station.x} cy={station.y} r={10.5} fill="none" stroke="#facc15" strokeWidth={1.6} />}
+            {/* Transparent hit area so the whole station is clickable, not only the icon strokes. */}
+            <circle cx={station.x} cy={station.y} r={10} fill="transparent" />
+            {selected && <circle cx={station.x} cy={station.y} r={11.5} fill="none" stroke="#facc15" strokeWidth={1.6} />}
             <circle
               cx={station.x}
               cy={station.y}
-              r={7}
-              fill={member ? '#0b1120' : EMPTY_COLOR}
-              stroke={member ? '#e2e8f0' : '#fecaca'}
-              strokeWidth={1.4}
-              className="transition-transform hover:scale-110 origin-center [transform-box:fill-box]"
+              r={11.5}
+              fill="none"
+              stroke="#facc15"
+              strokeWidth={1.2}
+              strokeDasharray="2 2"
+              className="opacity-0 group-focus-visible:opacity-100"
             />
+            <g className="transition-transform origin-center [transform-box:fill-box] group-hover:scale-110">
+              <PcIcon x={station.x} y={station.y} active={Boolean(member)} />
+            </g>
           </g>
         );
       })}
+    </svg>
+  );
+}
+
+/** Desktop computer centered on (x, y): light screen when a member sits there, red when the station is empty. */
+function PcIcon({ x, y, active }: { x: number; y: number; active: boolean }) {
+  const frame = active ? '#e2e8f0' : '#fecaca';
+  const screen = active ? '#0ea5e9' : EMPTY_COLOR;
+  return (
+    <g>
+      <rect x={x - 7} y={y - 6.5} width={14} height={9.5} rx={1.2} fill="#0b1120" stroke={frame} strokeWidth={1.2} />
+      <rect x={x - 5.4} y={y - 4.9} width={10.8} height={6.3} rx={0.5} fill={screen} />
+      <rect x={x - 1.1} y={y + 3} width={2.2} height={2.2} fill={frame} />
+      <rect x={x - 4} y={y + 5} width={8} height={1.5} rx={0.7} fill={frame} />
+    </g>
+  );
+}
+
+function LegendPc({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="-8 -8 16 16" className="size-4 shrink-0" aria-hidden>
+      <PcIcon x={0} y={0} active={active} />
     </svg>
   );
 }
@@ -113,11 +141,11 @@ export function Legend({
           </button>
         ))}
         <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-[11px] leading-tight text-slate-300">
-          <span className="size-3 shrink-0 rounded-full border-[1.5px] border-slate-200 bg-[#0b1120]" />
+          <LegendPc active />
           Computadoras y miembros
         </div>
         <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-[11px] leading-tight text-slate-300">
-          <span className="size-3 shrink-0 rounded-full border-[1.5px] border-red-200" style={{ backgroundColor: EMPTY_COLOR }} />
+          <LegendPc active={false} />
           Estación vacía
         </div>
       </div>
