@@ -1,0 +1,2 @@
+-- Operations Control schema. Run in the Supabase SQL editor.
+-- API routes use the service role key (src/lib/supabase.ts), so RLS stays enabled with no public policies.

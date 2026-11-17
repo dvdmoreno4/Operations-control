@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Palette from Logo.png: navy #283d8c and slate grey #747d9f. */
+  --color-bg: #ffffff;
+  --color-ink: #0f1740;
+  --color-accent: #283d8c;
+  --color-danger: #b42318;
+  --color-surface: #ffffff;
+  --color-border: #d5d8e3;
+
+  /* Fault severity, used by the alert symbol. */
+  --color-grade-1: #facc15;
+  --color-grade-2: #f97316;
+  --color-grade-3: #dc2626;
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+  }
+}
+
+.glass {
+  @apply bg-surface/80 backdrop-blur-md border border-border;
+}
