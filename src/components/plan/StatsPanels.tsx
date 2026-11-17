@@ -282,9 +282,13 @@ function SelectedStation({ stats, selectedStationId, period, loading }: Props) {
 }
 
 function StationTable({ stats, department, selectedStationId, onSelectStation }: Props) {
-  const rows = statsOfDepartment(stats, department);
+  // Only active workstations (with a member) are listed.
+  const rows = statsOfDepartment(stats, department).filter((s) => s.member);
   return (
-    <Panel title="Puestos de trabajo" aside={<span className="text-[11px] text-ink/60">{rows.length} estaciones</span>}>
+    <Panel title="Puestos de trabajo" aside={<span className="text-[11px] text-ink/60">{rows.length} activos</span>}>
+      {rows.length === 0 ? (
+        <p className="text-sm text-ink/60">No hay puestos activos{department ? ' en este departamento' : ''}.</p>
+      ) : (
       <TableFrame>
         <thead>
           <tr className="border-b border-border">
@@ -319,7 +323,7 @@ function StationTable({ stats, department, selectedStationId, onSelectStation }:
                   <span className="mr-1.5 inline-block size-2 rounded-sm align-middle" style={{ backgroundColor: DEPARTMENTS[station.department].color }} />
                   {station.id}
                 </Td>
-                <Td className={cn('max-w-[9rem] truncate', !member && 'text-ink/50')}>{member?.name ?? 'Vacía'}</Td>
+                <Td className="max-w-[9rem] truncate">{member?.name}</Td>
                 <Td className="min-w-[7rem]">{record ? <ScoreMeter score={score} /> : <span className="text-ink/40">-</span>}</Td>
                 <Td right>{record ? <SignedMoney value={record.pnl} /> : '-'}</Td>
                 <Td right>{record ? <span className={complianceClass(rate)}>{complianceText(rate)}</span> : '-'}</Td>
@@ -328,6 +332,7 @@ function StationTable({ stats, department, selectedStationId, onSelectStation }:
           })}
         </tbody>
       </TableFrame>
+      )}
     </Panel>
   );
 }

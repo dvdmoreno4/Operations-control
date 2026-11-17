@@ -64,7 +64,7 @@ function AssignForm({ stationId, onChanged, onError }: Shared & { stationId: str
   return (
     <form onSubmit={submit} className="space-y-4">
       <p className="text-sm">
-        <span className="inline-block size-2.5 rounded-full bg-red-500 mr-2 align-middle" />
+        <span className="inline-block size-2.5 rounded-full bg-slate-400 blur-[1px] mr-2 align-middle" />
         Estación vacía. Asigna un miembro para abrir su expediente.
       </p>
       <Field label="Nombre">

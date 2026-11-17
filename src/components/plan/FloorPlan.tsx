@@ -2,7 +2,9 @@ import type { KeyboardEvent } from 'react';
 import { DEPARTMENTS, STATIONS, ZONES, type DepartmentKey } from '../../lib/floorplan';
 import type { Member } from '../../lib/kpis';
 
-const EMPTY_COLOR = '#ef4444';
+const ACTIVE_COLOR = '#22c55e';
+const INACTIVE_COLOR = '#94a3b8';
+const BLUR_FILTER_ID = 'inactive-station-blur';
 
 type Props = {
   membersByStation: Map<string, Member>;
@@ -22,6 +24,9 @@ export function FloorPlan({ membersByStation, selectedStationId, highlighted, on
 
   return (
     <svg viewBox="-8 -8 356 286" className="w-full h-auto select-none" role="group" aria-label="Plano de planta">
+      <defs>
+        <BlurFilter />
+      </defs>
       <rect x={-6} y={-6} width={352} height={282} rx={4} fill="#0b1120" stroke="#334155" strokeWidth={1} />
       <line x1={318} y1={30} x2={346} y2={-2} stroke="#475569" strokeWidth={0.8} />
 
@@ -84,7 +89,7 @@ export function FloorPlan({ membersByStation, selectedStationId, highlighted, on
               className="opacity-0 group-focus-visible:opacity-100"
             />
             <g className="transition-transform origin-center [transform-box:fill-box] group-hover:scale-110">
-              <PcIcon x={station.x} y={station.y} active={Boolean(member)} />
+              {member ? <PcIcon x={station.x} y={station.y} /> : <InactiveDot x={station.x} y={station.y} />}
             </g>
           </g>
         );
@@ -93,24 +98,44 @@ export function FloorPlan({ membersByStation, selectedStationId, highlighted, on
   );
 }
 
-/** Desktop computer centered on (x, y): light screen when a member sits there, red when the station is empty. */
-function PcIcon({ x, y, active }: { x: number; y: number; active: boolean }) {
-  const frame = active ? '#e2e8f0' : '#fecaca';
-  const screen = active ? '#0ea5e9' : EMPTY_COLOR;
+function BlurFilter({ id = BLUR_FILTER_ID }: { id?: string }) {
+  return (
+    <filter id={id} x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation={1.6} />
+    </filter>
+  );
+}
+
+/** Desktop computer centered on (x, y), drawn in green for a station with a member. */
+function PcIcon({ x, y }: { x: number; y: number }) {
   return (
     <g>
-      <rect x={x - 7} y={y - 6.5} width={14} height={9.5} rx={1.2} fill="#0b1120" stroke={frame} strokeWidth={1.2} />
-      <rect x={x - 5.4} y={y - 4.9} width={10.8} height={6.3} rx={0.5} fill={screen} />
-      <rect x={x - 1.1} y={y + 3} width={2.2} height={2.2} fill={frame} />
-      <rect x={x - 4} y={y + 5} width={8} height={1.5} rx={0.7} fill={frame} />
+      <rect x={x - 7} y={y - 6.5} width={14} height={9.5} rx={1.2} fill="#0b1120" stroke={ACTIVE_COLOR} strokeWidth={1.2} />
+      <rect x={x - 5.4} y={y - 4.9} width={10.8} height={6.3} rx={0.5} fill={ACTIVE_COLOR} fillOpacity={0.85} />
+      <rect x={x - 1.1} y={y + 3} width={2.2} height={2.2} fill={ACTIVE_COLOR} />
+      <rect x={x - 4} y={y + 5} width={8} height={1.5} rx={0.7} fill={ACTIVE_COLOR} />
     </g>
   );
+}
+
+/** Blurred grey circle for an empty station. */
+function InactiveDot({ x, y, filterId = BLUR_FILTER_ID }: { x: number; y: number; filterId?: string }) {
+  return <circle cx={x} cy={y} r={4.5} fill={INACTIVE_COLOR} fillOpacity={0.7} filter={`url(#${filterId})`} />;
 }
 
 function LegendPc({ active }: { active: boolean }) {
   return (
     <svg viewBox="-8 -8 16 16" className="size-4 shrink-0" aria-hidden>
-      <PcIcon x={0} y={0} active={active} />
+      {active ? (
+        <PcIcon x={0} y={0} />
+      ) : (
+        <>
+          <defs>
+            <BlurFilter id={`${BLUR_FILTER_ID}-legend`} />
+          </defs>
+          <InactiveDot x={0} y={0} filterId={`${BLUR_FILTER_ID}-legend`} />
+        </>
+      )}
     </svg>
   );
 }
@@ -142,11 +167,11 @@ export function Legend({
         ))}
         <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-[11px] leading-tight text-slate-300">
           <LegendPc active />
-          Computadoras y miembros
+          Computadora activa
         </div>
         <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-[11px] leading-tight text-slate-300">
           <LegendPc active={false} />
-          Estación vacía
+          Estación inactiva
         </div>
       </div>
     </div>
