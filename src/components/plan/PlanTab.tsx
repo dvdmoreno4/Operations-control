@@ -3,12 +3,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiClientError, errorMessage } from '../../lib/apiClient';
 import { STATIONS, type DepartmentKey } from '../../lib/floorplan';
 import type { Member } from '../../lib/kpis';
+import { stationStats, type PeriodKpis } from '../../lib/stats';
 import { Alert, secondaryButton } from '../ui';
 import { FloorPlan, Legend } from './FloorPlan';
 import { MemberPanel } from './MemberPanel';
+import { StatsPanels } from './StatsPanels';
 
 export function PlanTab({ onLogout }: { onLogout: () => Promise<void> }) {
   const [members, setMembers] = useState<Member[] | null>(null);
+  const [kpis, setKpis] = useState<PeriodKpis | null>(null);
+  /** Month picked in the stats panel. Null means the most recent month with data. */
+  const [period, setPeriod] = useState<string | null>(null);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<DepartmentKey | null>(null);
   const [error, setError] = useState('');
@@ -30,11 +35,28 @@ export function PlanTab({ onLogout }: { onLogout: () => Promise<void> }) {
     }
   }, [handleError]);
 
+  const loadKpis = useCallback(async () => {
+    try {
+      setKpis(await api<PeriodKpis>(period ? `/api/kpis?period=${period}` : '/api/kpis'));
+    } catch (e) {
+      handleError(e);
+    }
+  }, [period, handleError]);
+
   useEffect(() => {
     void loadMembers();
   }, [loadMembers]);
 
+  useEffect(() => {
+    void loadKpis();
+  }, [loadKpis]);
+
+  const reload = useCallback(async () => {
+    await Promise.all([loadMembers(), loadKpis()]);
+  }, [loadMembers, loadKpis]);
+
   const membersByStation = useMemo(() => new Map((members ?? []).map((m) => [m.stationId, m])), [members]);
+  const stats = useMemo(() => stationStats(members ?? [], kpis?.records ?? []), [members, kpis]);
   const occupied = members?.length ?? 0;
 
   return (
@@ -49,50 +71,65 @@ export function PlanTab({ onLogout }: { onLogout: () => Promise<void> }) {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        <section className="xl:col-span-7 rounded-xl border border-slate-800 bg-slate-950 p-4 sm:p-5 space-y-4 text-slate-100">
-          <header className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-2">
-              <MapPin className="mt-0.5 size-4 text-sky-400" aria-hidden />
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-wide">Plano interactivo de planta (HQ)</h2>
-                <p className="text-[11px] text-slate-400">
-                  {members !== null
-                    ? `${occupied} de ${STATIONS.length} estaciones ocupadas`
-                    : error
-                      ? 'Sin datos'
-                      : 'Cargando...'}
-                </p>
+        <div className="xl:col-span-7 space-y-6">
+          <section className="rounded-xl border border-slate-800 bg-slate-950 p-4 sm:p-5 space-y-4 text-slate-100">
+            <header className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <MapPin className="mt-0.5 size-4 text-sky-400" aria-hidden />
+                <div>
+                  <h2 className="text-sm font-bold uppercase tracking-wide">Plano interactivo de planta (HQ)</h2>
+                  <p className="text-[11px] text-slate-400">
+                    {members !== null
+                      ? `${occupied} de ${STATIONS.length} estaciones ocupadas`
+                      : error
+                        ? 'Sin datos'
+                        : 'Cargando...'}
+                  </p>
+                </div>
               </div>
-            </div>
-            <p className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] text-slate-300">
-              Haz clic en una <span className="text-sky-400">estación de computadora</span> para consultar su expediente
-            </p>
-          </header>
+              <p className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] text-slate-300">
+                Haz clic en una <span className="text-sky-400">estación de computadora</span> para consultar su expediente
+              </p>
+            </header>
 
-          <FloorPlan
-            membersByStation={membersByStation}
-            selectedStationId={selectedStationId}
-            highlighted={highlighted}
-            onSelect={setSelectedStationId}
-          />
+            <FloorPlan
+              membersByStation={membersByStation}
+              selectedStationId={selectedStationId}
+              highlighted={highlighted}
+              onSelect={setSelectedStationId}
+            />
 
-          <Legend highlighted={highlighted} onToggle={(key) => setHighlighted((current) => (current === key ? null : key))} />
-        </section>
+            <Legend highlighted={highlighted} onToggle={(key) => setHighlighted((current) => (current === key ? null : key))} />
+          </section>
 
-        <div className="xl:col-span-5 space-y-3 xl:sticky xl:top-32">
           <MemberPanel
             stationId={selectedStationId}
             member={selectedStationId ? membersByStation.get(selectedStationId) : undefined}
             members={members ?? []}
-            onChanged={loadMembers}
+            onChanged={reload}
             onError={handleError}
           />
+
           <div className="flex justify-end">
             <button type="button" className={secondaryButton} onClick={() => void onLogout()}>
               Cerrar sesión
             </button>
           </div>
         </div>
+
+        <aside className="xl:col-span-5" aria-label="Estadísticas">
+          <StatsPanels
+            stats={stats}
+            department={highlighted}
+            onDepartment={setHighlighted}
+            period={kpis?.period ?? null}
+            periods={kpis?.periods ?? []}
+            onPeriod={setPeriod}
+            selectedStationId={selectedStationId}
+            onSelectStation={setSelectedStationId}
+            loading={members === null || kpis === null}
+          />
+        </aside>
       </div>
     </div>
   );

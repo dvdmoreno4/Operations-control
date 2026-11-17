@@ -9,7 +9,7 @@ type Shared = { onChanged: () => Promise<void>; onError: (error: unknown) => voi
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 
-const monthLabel = (period: string) =>
+export const monthLabel = (period: string) =>
   new Date(`${period}-01T00:00:00Z`).toLocaleDateString('es', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 export function MemberPanel({
