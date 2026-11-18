@@ -33,7 +33,7 @@ insert into stations (id, department_key) values
   ('IA-1', 'ia_cfd'), ('IA-2', 'ia_cfd'), ('IA-3', 'ia_cfd'), ('IA-4', 'ia_cfd'), ('IA-5', 'ia_cfd'),
   ('IA-6', 'ia_cfd'),
   ('IA-7', 'operadores_externos'), ('IA-8', 'operadores_externos'), ('IA-9', 'operadores_externos'), ('IA-10', 'operadores_externos'),
-  ('IA-11', 'ia_cfd'),
+  ('IA-11', 'nuevo_acciones'),
   ('NA-1', 'nuevo_acciones'), ('NA-2', 'nuevo_acciones'), ('NA-3', 'nuevo_acciones'),
   ('MP-1', 'materias_primas'),
   ('MI-1', 'mercados_internacionales'), ('MI-2', 'mercados_internacionales'),

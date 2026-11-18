@@ -45,11 +45,11 @@ export const ZONES: Zone[] = [
     labelY: 110,
     labelRotate: -90,
   },
-  { id: 'sub-ia', department: 'ia_cfd', points: '68,92 122,92 122,120 76,120', label: 'SUB-IA', labelX: 82, labelY: 87, labelOutside: true },
   {
+    // Includes the former SUB-IA corner (station IA-11), which belongs to Nuevo y Acciones.
     id: 'nuevo',
     department: 'nuevo_acciones',
-    points: '122,92 250,90 276,132 272,170 160,170 84,152 76,120 122,120',
+    points: '68,92 122,92 250,90 276,132 272,170 160,170 84,152 76,120',
     label: 'NUEVO Y ACCIONES',
     labelX: 192,
     labelY: 124,
@@ -84,7 +84,8 @@ export const STATIONS: Station[] = [
   ...[40, 85, 130, 205, 250, 295].map((x, i) => station(`IA-${i + 1}`, 'ia_cfd', x, 14)),
   // Ids kept as IA-7..IA-10 so members already assigned there stay in place.
   ...[56, 92, 128, 164].map((y, i) => station(`IA-${i + 7}`, 'operadores_externos', 14, y)),
-  station('IA-11', 'ia_cfd', 99, 108),
+  // Id kept as IA-11 so a member already assigned there stays in place.
+  station('IA-11', 'nuevo_acciones', 99, 108),
   station('NA-1', 'nuevo_acciones', 208, 106),
   station('NA-2', 'nuevo_acciones', 113, 138),
   station('NA-3', 'nuevo_acciones', 234, 144),
