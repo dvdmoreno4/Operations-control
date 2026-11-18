@@ -18,6 +18,8 @@ export type PeriodKpis = {
 export type StationStat = {
   station: Station;
   member: Member | undefined;
+  /** Department this station counts for: the member's own department, else the station's. */
+  department: DepartmentKey;
   /** Record of the selected period, or undefined when the member has none for that month. */
   record: KpiRecord | undefined;
   score: number | null;
@@ -50,7 +52,7 @@ export function stationStats(members: Member[], records: MemberRecord[]): Statio
   return STATIONS.map((station) => {
     const member = memberByStation.get(station.id);
     const record = member ? recordByMember.get(member.id) : undefined;
-    return { station, member, record, score: record ? totalScore(record) : null };
+    return { station, member, department: member?.departmentKey ?? station.department, record, score: record ? totalScore(record) : null };
   });
 }
 
@@ -81,13 +83,13 @@ export function groupStats(stats: StationStat[]): GroupStats {
 }
 
 export const statsOfDepartment = (stats: StationStat[], department: DepartmentKey | null) =>
-  department === null ? stats : stats.filter((s) => s.station.department === department);
+  department === null ? stats : stats.filter((s) => s.department === department);
 
 /** 1-based position of the station by score among the reporting stations of its department. */
 export function rankInDepartment(stats: StationStat[], stationId: string): { rank: number; of: number } | null {
   const target = stats.find((s) => s.station.id === stationId);
   if (!target || target.score === null) return null;
-  const peers = stats.filter((s) => s.station.department === target.station.department && s.score !== null);
+  const peers = stats.filter((s) => s.department === target.department && s.score !== null);
   const rank = peers.filter((s) => (s.score ?? 0) > (target.score ?? 0)).length + 1;
   return { rank, of: peers.length };
 }

@@ -1,5 +1,12 @@
 import { ApiError, parseText } from './api';
-import { findStation } from './floorplan';
+import { DEPARTMENT_KEYS, findStation, type DepartmentKey } from './floorplan';
+
+/** A department key, or null for "same as the station". */
+export function parseDepartment(value: unknown): DepartmentKey | null {
+  if (value === null || value === '') return null;
+  if (typeof value !== 'string' || !(DEPARTMENT_KEYS as string[]).includes(value)) throw new ApiError(400, 'El departamento no existe');
+  return value as DepartmentKey;
+}
 
 export function parseStationId(value: unknown): string {
   if (typeof value !== 'string' || !findStation(value)) throw new ApiError(400, 'La estación no existe en el plano');

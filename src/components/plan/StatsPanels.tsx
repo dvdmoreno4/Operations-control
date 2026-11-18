@@ -226,8 +226,8 @@ function SelectedStation({ stats, selectedStationId, period, loading, onEditStat
     );
   }
 
-  const department = DEPARTMENTS[stat.station.department];
-  const peers = groupStats(statsOfDepartment(stats, stat.station.department));
+  const department = DEPARTMENTS[stat.department];
+  const peers = groupStats(statsOfDepartment(stats, stat.department));
   const rank = rankInDepartment(stats, stat.station.id);
   const diff = stat.score !== null && peers.avgScore !== null ? Math.round((stat.score - peers.avgScore) * 10) / 10 : null;
   const rate = stat.record ? compliance(stat.record) : null;
@@ -307,7 +307,7 @@ function StationTable({ stats, department, selectedStationId, onSelectStation }:
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ station, member, record, score }) => {
+          {rows.map(({ station, member, department, record, score }) => {
             const rate = record ? compliance(record) : null;
             const selected = station.id === selectedStationId;
             return (
@@ -327,7 +327,7 @@ function StationTable({ stats, department, selectedStationId, onSelectStation }:
                 )}
               >
                 <Td className="whitespace-nowrap font-mono">
-                  <span className="mr-1.5 inline-block size-2 rounded-sm align-middle" style={{ backgroundColor: DEPARTMENTS[station.department].color }} />
+                  <span className="mr-1.5 inline-block size-2 rounded-sm align-middle" style={{ backgroundColor: DEPARTMENTS[department].color }} />
                   {station.id}
                 </Td>
                 <Td className="max-w-[9rem] truncate">{member?.name}</Td>

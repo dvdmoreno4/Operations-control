@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../lib/apiClient';
-import { DEPARTMENTS, findStation } from '../../lib/floorplan';
+import { DEPARTMENT_KEYS, DEPARTMENTS, findStation } from '../../lib/floorplan';
 import type { Member } from '../../lib/kpis';
 import { Field, inputClass, primaryButton, secondaryButton } from '../ui';
 import { PLAN_VIEWBOX } from './FloorPlan';
@@ -24,6 +24,7 @@ export function StationPopover({ stationId, member, onClose, onChanged, onError 
   const ref = useRef<HTMLDivElement>(null);
   const [name, setName] = useState(member?.name ?? '');
   const [role, setRole] = useState(member?.role ?? '');
+  const [department, setDepartment] = useState<string>(member?.departmentKey ?? station?.department ?? '');
   const [busy, setBusy] = useState(false);
 
   // Opened from the side panel the popover can be off screen; bring it into view.
@@ -58,8 +59,10 @@ export function StationPopover({ stationId, member, onClose, onChanged, onError 
     event.preventDefault();
     setBusy(true);
     try {
-      if (member) await api(`/api/members/${member.id}`, 'PATCH', { name, role });
-      else await api('/api/members', 'POST', { stationId, name, role });
+      // The station's own department is stored as null ("same as the station").
+      const departmentKey = !station || department === station.department ? null : department;
+      if (member) await api(`/api/members/${member.id}`, 'PATCH', { name, role, departmentKey });
+      else await api('/api/members', 'POST', { stationId, name, role, departmentKey });
       await onChanged();
       onClose();
     } catch (e) {
@@ -105,6 +108,16 @@ export function StationPopover({ stationId, member, onClose, onChanged, onError 
         </Field>
         <Field label="Cargo">
           <input className={inputClass} value={role} onChange={(e) => setRole(e.target.value)} maxLength={80} />
+        </Field>
+        <Field label="Departamento">
+          <select className={inputClass} value={department} onChange={(e) => setDepartment(e.target.value)}>
+            {DEPARTMENT_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {DEPARTMENTS[key].label}
+                {key === station.department ? ' (del puesto)' : ''}
+              </option>
+            ))}
+          </select>
         </Field>
         <div className="flex gap-2">
           <button type="submit" className={primaryButton} disabled={busy || !name.trim()}>

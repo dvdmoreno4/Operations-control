@@ -66,8 +66,11 @@ export function FloorPlan({ membersByStation, selectedStationId, highlighted, on
       {STATIONS.map((station) => {
         const member = membersByStation.get(station.id);
         const selected = station.id === selectedStationId;
-        const dimmed = highlighted !== null && highlighted !== station.department;
-        const label = member ? `${station.id}: ${member.name}` : `${station.id}: estación vacía`;
+        const dimmed = highlighted !== null && highlighted !== (member?.departmentKey ?? station.department);
+        const pending = member?.pendingRequests ?? 0;
+        const label = member
+          ? `${station.id}: ${member.name}${pending ? `, ${pending} solicitud${pending === 1 ? '' : 'es'} pendiente${pending === 1 ? '' : 's'}` : ''}`
+          : `${station.id}: estación vacía`;
         return (
           <g
             key={station.id}
@@ -97,6 +100,7 @@ export function FloorPlan({ membersByStation, selectedStationId, highlighted, on
             <g className="transition-transform origin-center [transform-box:fill-box] group-hover:scale-110">
               {member ? <PcIcon x={station.x} y={station.y} /> : <InactiveDot x={station.x} y={station.y} />}
             </g>
+            {pending > 0 && <RequestBadge x={station.x + 7} y={station.y - 7} count={pending} />}
           </g>
         );
       })}
@@ -120,6 +124,18 @@ function PcIcon({ x, y }: { x: number; y: number }) {
       <rect x={x - 5.4} y={y - 4.9} width={10.8} height={6.3} rx={0.5} fill={ACTIVE_COLOR} fillOpacity={0.85} />
       <rect x={x - 1.1} y={y + 3} width={2.2} height={2.2} fill={ACTIVE_COLOR} />
       <rect x={x - 4} y={y + 5} width={8} height={1.5} rx={0.7} fill={ACTIVE_COLOR} />
+    </g>
+  );
+}
+
+/** Red notification circle with the number of pending requests. */
+function RequestBadge({ x, y, count }: { x: number; y: number; count: number }) {
+  return (
+    <g className="pointer-events-none" aria-hidden>
+      <circle cx={x} cy={y} r={4.4} fill="#dc2626" stroke="#0b1120" strokeWidth={0.8} />
+      <text x={x} y={y + 1.75} textAnchor="middle" fontSize={count > 9 ? 4 : 5} fontWeight={700} fill="#ffffff">
+        {count > 9 ? '9+' : count}
+      </text>
     </g>
   );
 }

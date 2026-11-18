@@ -27,12 +27,21 @@ export const MANUAL_POINTS_CAP = 15;
 /** Monthly points that give a project score of 100. Will move to the KPI settings. */
 export const PROJECT_POINTS_GOAL = 60;
 
+/** Share of a project's monthly points a collaborator earns (the owner earns all of them). */
+export const COLLABORATOR_SHARE = 0.5;
+
 export type ProjectEvent = { status: ProjectStatus; progress: number; at: string };
 export type ProjectFile = { id: string; name: string; size: number; uploadedAt: string };
 
+export type ProjectPerson = { memberId: string; name: string };
+
 export type Project = {
   id: string;
+  /** Owner of the project. */
   memberId: string;
+  ownerName: string;
+  /** Members who collaborate on it besides the owner. */
+  collaborators: ProjectPerson[];
   name: string;
   description: string;
   status: ProjectStatus;
@@ -53,8 +62,14 @@ export type ProjectScore = {
   points: number;
   milestonePoints: number;
   manualPoints: number;
-  milestones: { project: string; status: ProjectStatus; at: string }[];
+  milestones: { project: string; status: ProjectStatus; at: string; share: number }[];
 };
+
+/** Share of a project's points that `memberId` earns: 1 as owner, COLLABORATOR_SHARE as collaborator, else 0. */
+export function shareOf(project: Pick<Project, 'memberId' | 'collaborators'>, memberId: string): number {
+  if (project.memberId === memberId) return 1;
+  return project.collaborators.some((c) => c.memberId === memberId) ? COLLABORATOR_SHARE : 0;
+}
 
 /** Month bounds in UTC for a YYYY-MM period. */
 function monthBounds(period: string): [number, number] {
@@ -66,14 +81,17 @@ function monthBounds(period: string): [number, number] {
  * Score from 0 to 100 for the projects of one member in a month:
  * milestone points the first time a project reaches each milestone in that month, plus points
  * for manual progress gained in the proposal stage (capped), over PROJECT_POINTS_GOAL.
+ * `share` scales a project's points (1 for its owner, COLLABORATOR_SHARE for a collaborator).
  */
-export function projectScore(projects: Pick<Project, 'name' | 'events'>[], period: string): ProjectScore {
+export function projectScore(projects: (Pick<Project, 'name' | 'events'> & { share?: number })[], period: string): ProjectScore {
   const [start, end] = monthBounds(period);
   let milestonePoints = 0;
   let manualGain = 0;
   const milestones: ProjectScore['milestones'] = [];
 
   for (const project of projects) {
+    const share = project.share ?? 1;
+    if (share <= 0) continue;
     const time = (e: ProjectEvent) => Date.parse(e.at);
     const before = project.events.filter((e) => time(e) < start);
     const during = project.events.filter((e) => time(e) >= start && time(e) < end);
@@ -82,15 +100,15 @@ export function projectScore(projects: Pick<Project, 'name' | 'events'>[], perio
     for (const event of during) {
       if (event.status === 'propuesta' || reached.has(event.status)) continue;
       reached.add(event.status);
-      milestonePoints += MILESTONE_POINTS[event.status];
-      milestones.push({ project: project.name, status: event.status, at: event.at });
+      milestonePoints += MILESTONE_POINTS[event.status] * share;
+      milestones.push({ project: project.name, status: event.status, at: event.at, share });
     }
 
     const proposalDuring = during.filter((e) => e.status === 'propuesta').map((e) => e.progress);
     if (proposalDuring.length > 0) {
       const last = before.at(-1);
       const startProgress = last && last.status === 'propuesta' ? last.progress : 0;
-      manualGain += Math.max(0, Math.max(...proposalDuring) - startProgress);
+      manualGain += Math.max(0, Math.max(...proposalDuring) - startProgress) * share;
     }
   }
 

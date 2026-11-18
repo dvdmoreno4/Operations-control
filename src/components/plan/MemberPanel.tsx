@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api } from '../../lib/apiClient';
-import { DEPARTMENTS, STATIONS, findStation } from '../../lib/floorplan';
-import { compliance, EMPTY_KPIS, SCORE_SEGMENTS, totalScore, type KpiRecord, type KpiValues, type Member } from '../../lib/kpis';
+import { DEPARTMENT_KEYS, DEPARTMENTS, STATIONS, findStation } from '../../lib/floorplan';
+import { compliance, EMPTY_KPIS, memberDepartment, SCORE_SEGMENTS, totalScore, type KpiRecord, type KpiValues, type Member } from '../../lib/kpis';
 import { Field, inputClass, money, primaryButton, secondaryButton, SignedMoney, SignedPercent, TableFrame, Td, Th } from '../ui';
 import { IbReportSection } from './ib/IbReportSection';
 import { ProjectsSection } from './ProjectsSection';
+import { RequestsSection } from './RequestsSection';
 import { ScoreBar } from './ScoreBar';
 
 type Shared = { onChanged: () => Promise<void>; onError: (error: unknown) => void };
@@ -29,7 +30,8 @@ export function MemberPanel({
     );
   }
   const station = findStation(stationId);
-  const department = station ? DEPARTMENTS[station.department] : null;
+  const departmentKey = member ? memberDepartment(member) : station?.department;
+  const department = departmentKey ? DEPARTMENTS[departmentKey] : null;
 
   return (
     <section className="glass rounded-xl p-4 sm:p-6 space-y-5">
@@ -158,6 +160,8 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
         </>
       )}
 
+      <RequestsSection memberId={member.id} admin={admin} onChanged={onChanged} onError={onError} />
+
       <IbReportSection
         memberId={member.id}
         onError={onError}
@@ -167,7 +171,17 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
         }}
       />
 
-      <ProjectsSection memberId={member.id} period={period} admin={admin} onError={onError} />
+      <ProjectsSection
+        memberId={member.id}
+        period={period}
+        admin={admin}
+        members={members}
+        onScoreChanged={async () => {
+          await loadRecords();
+          await onChanged();
+        }}
+        onError={onError}
+      />
     </div>
   );
 }
@@ -182,6 +196,8 @@ function EditMember({
   const [name, setName] = useState(member.name);
   const [role, setRole] = useState(member.role);
   const [stationId, setStationId] = useState(member.stationId);
+  /** '' = same department as the station. */
+  const [departmentKey, setDepartmentKey] = useState<string>(member.departmentKey ?? '');
   const [busy, setBusy] = useState(false);
 
   const freeStations = useMemo(() => {
@@ -193,7 +209,7 @@ function EditMember({
     event.preventDefault();
     setBusy(true);
     try {
-      await api(`/api/members/${member.id}`, 'PATCH', { name, role, stationId });
+      await api(`/api/members/${member.id}`, 'PATCH', { name, role, stationId, departmentKey: departmentKey || null });
       await onChanged();
       onDone();
     } catch (e) {
@@ -210,6 +226,16 @@ function EditMember({
       </Field>
       <Field label="Cargo">
         <input className={inputClass} value={role} onChange={(e) => setRole(e.target.value)} maxLength={80} />
+      </Field>
+      <Field label="Departamento">
+        <select className={inputClass} value={departmentKey} onChange={(e) => setDepartmentKey(e.target.value)}>
+          <option value="">El del puesto ({DEPARTMENTS[findStation(stationId)?.department ?? 'ia_cfd'].short})</option>
+          {DEPARTMENT_KEYS.map((key) => (
+            <option key={key} value={key}>
+              {DEPARTMENTS[key].label}
+            </option>
+          ))}
+        </select>
       </Field>
       <Field label="Estación">
         <select className={inputClass} value={stationId} onChange={(e) => setStationId(e.target.value)}>

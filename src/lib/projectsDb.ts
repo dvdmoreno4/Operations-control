@@ -1,7 +1,7 @@
 // Server-only helpers for the projects API routes.
 
 import { ApiError, db, parseText, parseUuid, unwrap } from './api';
-import { isProjectStatus, type Project, type ProjectStatus } from './projects';
+import { isProjectStatus, projectScore, shareOf, type Project, type ProjectStatus } from './projects';
 
 export const PROJECT_NOT_FOUND = 'Proyecto no encontrado';
 
@@ -15,25 +15,43 @@ export function parseStatus(value: unknown): ProjectStatus {
 
 type Row = Record<string, unknown>;
 
-/** Projects of a member (newest first) with their files and history. */
+/**
+ * Projects a member owns or collaborates on (newest first), with owner, collaborators, files
+ * and history.
+ */
 export async function loadProjects(memberId: string): Promise<Project[]> {
   const client = db();
-  const projectRows = unwrap(
-    await client.from('projects').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
-  ) as Row[];
+  const collaborating = unwrap(await client.from('project_collaborators').select('project_id').eq('member_id', memberId)) as Row[];
+  const collaboratingIds = collaborating.map((r) => String(r.project_id));
+
+  let query = client.from('projects').select('*').order('created_at', { ascending: false });
+  query = collaboratingIds.length
+    ? query.or(`member_id.eq.${memberId},id.in.(${collaboratingIds.join(',')})`)
+    : query.eq('member_id', memberId);
+  const projectRows = unwrap(await query) as Row[];
   if (projectRows.length === 0) return [];
 
   const ids = projectRows.map((row) => String(row.id));
-  const [fileRows, eventRows] = await Promise.all([
+  const [fileRows, eventRows, collaboratorRows] = await Promise.all([
     client.from('project_files').select('id, project_id, name, size, uploaded_at').in('project_id', ids).order('uploaded_at'),
     client.from('project_events').select('project_id, status, progress, at').in('project_id', ids).order('at'),
+    client.from('project_collaborators').select('project_id, member_id').in('project_id', ids).order('added_at'),
   ]);
   const files = unwrap(fileRows) as Row[];
   const events = unwrap(eventRows) as Row[];
+  const collaborators = unwrap(collaboratorRows) as Row[];
+
+  const peopleIds = [...new Set([...projectRows.map((r) => String(r.member_id)), ...collaborators.map((c) => String(c.member_id))])];
+  const people = unwrap(await client.from('members').select('id, name').in('id', peopleIds)) as Row[];
+  const nameOf = new Map(people.map((p) => [String(p.id), String(p.name)]));
 
   return projectRows.map((row) => ({
     id: String(row.id),
     memberId: String(row.member_id),
+    ownerName: nameOf.get(String(row.member_id)) ?? '',
+    collaborators: collaborators
+      .filter((c) => c.project_id === row.id)
+      .map((c) => ({ memberId: String(c.member_id), name: nameOf.get(String(c.member_id)) ?? '' })),
     name: String(row.name),
     description: String(row.description ?? ''),
     status: parseStatus(row.status),
@@ -59,4 +77,33 @@ export async function getProject(rawId: string): Promise<{ id: string; memberId:
 
 export async function addEvent(projectId: string, status: ProjectStatus, progress: number) {
   unwrap(await db().from('project_events').insert({ project_id: projectId, status, progress }).select('id'));
+}
+
+/** Owner and collaborators of a project. */
+export async function projectPeople(projectId: string, ownerId: string): Promise<string[]> {
+  const rows = unwrap(await db().from('project_collaborators').select('member_id').eq('project_id', projectId)) as Row[];
+  return [ownerId, ...rows.map((r) => String(r.member_id))];
+}
+
+export const currentMonth = () => new Date().toISOString().slice(0, 7);
+
+/**
+ * Recomputes the project score of these members for a month (owned projects at full share,
+ * collaborations at COLLABORATOR_SHARE) and writes it to their KPI record of that month.
+ */
+export async function recomputeProjectScores(memberIds: string[], month = currentMonth()) {
+  const client = db();
+  for (const memberId of [...new Set(memberIds)]) {
+    const projects = await loadProjects(memberId);
+    const { score } = projectScore(
+      projects.map((p) => ({ ...p, share: shareOf(p, memberId) })),
+      month,
+    );
+    unwrap(
+      await client
+        .from('kpi_records')
+        .upsert({ member_id: memberId, period: `${month}-01`, score_projects: score, updated_at: new Date().toISOString() })
+        .select('member_id'),
+    );
+  }
 }

@@ -1,7 +1,7 @@
 // Run with: npm test
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { projectScore } from '../src/lib/projects.ts';
+import { COLLABORATOR_SHARE, projectScore, shareOf } from '../src/lib/projects.ts';
 
 const ev = (status, progress, at) => ({ status, progress, at });
 
@@ -42,4 +42,23 @@ test('no activity gives 0', () => {
   assert.equal(projectScore([], '2026-11').score, 0);
   const idle = { name: 'A', events: [ev('propuesta', 20, '2026-10-01T10:00:00Z')] };
   assert.equal(projectScore([idle], '2026-11').score, 0);
+});
+
+test('collaborators earn a share of the project points, others nothing', () => {
+  const project = {
+    name: 'A',
+    memberId: 'owner',
+    collaborators: [{ memberId: 'helper', name: 'Ayudante' }],
+    events: [ev('propuesta', 0, '2026-10-02T10:00:00Z'), ev('aceptado', 50, '2026-11-05T10:00:00Z')],
+  };
+  assert.equal(shareOf(project, 'owner'), 1);
+  assert.equal(shareOf(project, 'helper'), COLLABORATOR_SHARE);
+  assert.equal(shareOf(project, 'stranger'), 0);
+
+  const owner = projectScore([{ ...project, share: shareOf(project, 'owner') }], '2026-11');
+  const helper = projectScore([{ ...project, share: shareOf(project, 'helper') }], '2026-11');
+  const stranger = projectScore([{ ...project, share: shareOf(project, 'stranger') }], '2026-11');
+  assert.equal(owner.milestonePoints, 30);
+  assert.equal(helper.milestonePoints, 30 * COLLABORATOR_SHARE);
+  assert.equal(stranger.points, 0);
 });

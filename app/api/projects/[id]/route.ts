@@ -1,6 +1,14 @@
 import { ApiError, db, isAdminRequest, jsonBody, parseNumber, requireAdmin, route, unwrap } from '@/src/lib/api';
 import { MAX_MANUAL_PROGRESS, progressOf } from '@/src/lib/projects';
-import { addEvent, getProject, parseProjectDescription, parseProjectName, parseStatus } from '@/src/lib/projectsDb';
+import {
+  addEvent,
+  getProject,
+  parseProjectDescription,
+  parseProjectName,
+  parseStatus,
+  projectPeople,
+  recomputeProjectScores,
+} from '@/src/lib/projectsDb';
 import { DOCUMENTS_BUCKET } from '@/src/lib/storage';
 
 export const dynamic = 'force-dynamic';
@@ -37,7 +45,11 @@ export const PATCH = route<Context>(async (req, { params }) => {
   unwrap(await db().from('projects').update(changes).eq('id', project.id).select('id'));
 
   const progressChanged = progressOf(status, manualProgress) !== progressOf(project.status, project.manualProgress);
-  if (status !== project.status || progressChanged) await addEvent(project.id, status, progressOf(status, manualProgress));
+  if (status !== project.status || progressChanged) {
+    await addEvent(project.id, status, progressOf(status, manualProgress));
+    // Progress changes the month's project score of the owner and every collaborator.
+    await recomputeProjectScores(await projectPeople(project.id, project.memberId));
+  }
   return { ok: true };
 });
 
@@ -49,11 +61,13 @@ export const DELETE = route<Context>(async (req, { params }) => {
   }
 
   const client = db();
+  const people = await projectPeople(project.id, project.memberId);
   const files = unwrap(await client.from('project_files').select('file_path').eq('project_id', project.id));
   if (files.length > 0) {
     const { error } = await client.storage.from(DOCUMENTS_BUCKET).remove(files.map((f) => String(f.file_path)));
     if (error) console.error(error.message);
   }
   unwrap(await client.from('projects').delete().eq('id', project.id).select('id'));
+  await recomputeProjectScores(people);
   return { ok: true };
 });

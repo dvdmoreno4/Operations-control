@@ -1,14 +1,24 @@
 // KPI types and scoring shared by API routes and the UI. No server-only imports here.
 
+import { findStation, type DepartmentKey } from './floorplan';
+
 export type Member = {
   id: string;
   stationId: string;
   name: string;
   role: string;
+  /** Department the member belongs to; null means the department of their station. */
+  departmentKey: DepartmentKey | null;
+  /** Requests still pending or in progress, shown as a badge on the plan. */
+  pendingRequests: number;
   /** Total score of the member's most recent KPI period, or null without records. */
   latestScore: number | null;
   latestPeriod: string | null;
 };
+
+/** Department used for the member's KPIs: their own, or their station's. */
+export const memberDepartment = (member: Pick<Member, 'departmentKey' | 'stationId'>): DepartmentKey | null =>
+  member.departmentKey ?? findStation(member.stationId)?.department ?? null;
 
 export type KpiValues = {
   operationsCount: number;

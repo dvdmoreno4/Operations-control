@@ -1,13 +1,16 @@
-import { Download, FileText, Trash2, Upload } from 'lucide-react';
+import { Download, FileText, Trash2, Upload, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../lib/apiClient';
 import { cn } from '../../lib/cn';
+import type { Member } from '../../lib/kpis';
 import {
+  COLLABORATOR_SHARE,
   MAX_MANUAL_PROGRESS,
   PROJECT_POINTS_GOAL,
   PROJECT_STATUSES,
   progressOf,
   projectScore,
+  shareOf,
   STATUS_INFO,
   type Project,
   type ProjectStatus,
@@ -21,6 +24,10 @@ type Props = {
   /** Month (YYYY-MM) used for the project score. */
   period: string;
   admin: boolean;
+  /** Everyone on the plan, to pick collaborators from. */
+  members: Member[];
+  /** Reloads the member's KPIs after a change that moves the project score. */
+  onScoreChanged: () => Promise<void>;
   onError: (error: unknown) => void;
 };
 
@@ -33,7 +40,7 @@ const MILESTONES: { at: number; label: string }[] = [
 const fileSize = (bytes: number) =>
   bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-export function ProjectsSection({ memberId, period, admin, onError }: Props) {
+export function ProjectsSection({ memberId, period, admin, members, onScoreChanged, onError }: Props) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -49,7 +56,14 @@ export function ProjectsSection({ memberId, period, admin, onError }: Props) {
     void load();
   }, [load]);
 
-  const score = useMemo(() => (projects ? projectScore(projects, period) : null), [projects, period]);
+  const score = useMemo(
+    () => (projects ? projectScore(projects.map((p) => ({ ...p, share: shareOf(p, memberId) })), period) : null),
+    [projects, period, memberId],
+  );
+
+  const changed = useCallback(async () => {
+    await Promise.all([load(), onScoreChanged()]);
+  }, [load, onScoreChanged]);
 
   return (
     <div className="space-y-3">
@@ -72,7 +86,8 @@ export function ProjectsSection({ memberId, period, admin, onError }: Props) {
             </span>
           </div>
           <p className="mt-1 text-ink/60">
-            {score.points} de {PROJECT_POINTS_GOAL} puntos: {score.milestonePoints} por hitos y {score.manualPoints} por avance de propuestas.
+            {score.points} de {PROJECT_POINTS_GOAL} puntos: {score.milestonePoints} por hitos y {score.manualPoints} por avance de propuestas. En los
+            proyectos donde colabora suma el {Math.round(COLLABORATOR_SHARE * 100)}% de los puntos.
           </p>
         </div>
       )}
@@ -93,7 +108,7 @@ export function ProjectsSection({ memberId, period, admin, onError }: Props) {
       ) : (
         <ul className="space-y-3">
           {projects.map((project) => (
-            <ProjectCard key={project.id} project={project} admin={admin} onChanged={load} onError={onError} />
+            <ProjectCard key={project.id} project={project} viewerId={memberId} members={members} admin={admin} onChanged={changed} onError={onError} />
           ))}
         </ul>
       )}
@@ -187,11 +202,16 @@ function ProgressTrack({ status, progress }: { status: ProjectStatus; progress: 
 
 function ProjectCard({
   project,
+  viewerId,
+  members,
   admin,
   onChanged,
   onError,
 }: {
   project: Project;
+  /** Member whose file is open. */
+  viewerId: string;
+  members: Member[];
   admin: boolean;
   onChanged: () => Promise<void>;
   onError: (error: unknown) => void;
@@ -199,7 +219,8 @@ function ProjectCard({
   const [manual, setManual] = useState(project.manualProgress);
   const [busy, setBusy] = useState(false);
   const progress = progressOf(project.status, project.status === 'propuesta' ? manual : project.manualProgress);
-  const canDelete = admin || project.status === 'propuesta';
+  const owned = project.memberId === viewerId;
+  const canDelete = admin || (owned && project.status === 'propuesta');
 
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
@@ -225,6 +246,9 @@ function ProjectCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold">{project.name}</p>
+          <p className="text-[11px] text-ink/60">
+            {owned ? 'Dueño del proyecto' : `Colaborador (${Math.round(COLLABORATOR_SHARE * 100)}% de los puntos) · dueño: ${project.ownerName}`}
+          </p>
           {project.description && <p className="whitespace-pre-wrap text-xs text-ink/70">{project.description}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -290,8 +314,67 @@ function ProjectCard({
         </div>
       )}
 
+      <Collaborators project={project} members={members} busy={busy} run={run} />
+
       <ProjectFiles project={project} busy={busy} run={run} />
     </li>
+  );
+}
+
+function Collaborators({
+  project,
+  members,
+  busy,
+  run,
+}: {
+  project: Project;
+  members: Member[];
+  busy: boolean;
+  run: (action: () => Promise<unknown>) => Promise<void>;
+}) {
+  const taken = new Set([project.memberId, ...project.collaborators.map((c) => c.memberId)]);
+  const candidates = members.filter((m) => !taken.has(m.id)).sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div className="space-y-1.5">
+      <span className="text-[10px] font-mono uppercase tracking-wider text-ink/60">Colaboradores</span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {project.collaborators.length === 0 && <span className="text-xs text-ink/50">Sin colaboradores.</span>}
+        {project.collaborators.map((c) => (
+          <span key={c.memberId} className="flex items-center gap-1 rounded-full border border-border py-0.5 pl-2.5 pr-1 text-[11px]">
+            {c.name}
+            <button
+              type="button"
+              className={rowAction}
+              disabled={busy}
+              aria-label={`Quitar a ${c.name}`}
+              onClick={() => void run(() => api(`/api/projects/${project.id}/collaborators/${c.memberId}`, 'DELETE'))}
+            >
+              <X className="size-3" aria-hidden />
+            </button>
+          </span>
+        ))}
+        {candidates.length > 0 && (
+          <select
+            aria-label="Añadir colaborador"
+            className={cn(inputClass, 'w-auto py-1 text-xs')}
+            value=""
+            disabled={busy}
+            onChange={(e) => {
+              const memberId = e.target.value;
+              if (memberId) void run(() => api(`/api/projects/${project.id}/collaborators`, 'POST', { memberId }));
+            }}
+          >
+            <option value="">+ Añadir colaborador</option>
+            {candidates.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} ({m.stationId})
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+    </div>
   );
 }
 
