@@ -3,6 +3,7 @@ import { api } from '../../lib/apiClient';
 import { DEPARTMENTS, STATIONS, findStation } from '../../lib/floorplan';
 import { compliance, EMPTY_KPIS, SCORE_SEGMENTS, totalScore, type KpiRecord, type KpiValues, type Member } from '../../lib/kpis';
 import { Field, inputClass, money, primaryButton, secondaryButton, SignedMoney, SignedPercent, TableFrame, Td, Th } from '../ui';
+import { IbReportSection } from './ib/IbReportSection';
 import { ProjectsSection } from './ProjectsSection';
 import { ScoreBar } from './ScoreBar';
 
@@ -156,6 +157,15 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
           <History records={records} selected={period} onSelect={setPeriod} />
         </>
       )}
+
+      <IbReportSection
+        memberId={member.id}
+        onError={onError}
+        onScored={async () => {
+          await loadRecords();
+          await onChanged();
+        }}
+      />
 
       <ProjectsSection memberId={member.id} period={period} admin={admin} onError={onError} />
     </div>
