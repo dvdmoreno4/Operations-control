@@ -1,9 +1,16 @@
 // Floor plan of the HQ (see Esquema.png). Coordinates are in the SVG viewBox units used by FloorPlan.tsx.
 
-export type DepartmentKey = 'ia_cfd' | 'nuevo_acciones' | 'materias_primas' | 'mercados_internacionales' | 'gerencia';
+export type DepartmentKey =
+  | 'ia_cfd'
+  | 'operadores_externos'
+  | 'nuevo_acciones'
+  | 'materias_primas'
+  | 'mercados_internacionales'
+  | 'gerencia';
 
 export const DEPARTMENTS: Record<DepartmentKey, { label: string; short: string; color: string }> = {
   ia_cfd: { label: "Departamento IA y CFD's", short: "IA y CFD's", color: '#84cc16' },
+  operadores_externos: { label: 'Operadores externos', short: 'Op. externos', color: '#8b5cf6' },
   nuevo_acciones: { label: 'Departamento de Nuevo y Acciones', short: 'Nuevo y Acciones', color: '#14b8a6' },
   materias_primas: { label: 'Departamento de Materias primas y coberturas', short: 'Materias primas', color: '#f97316' },
   mercados_internacionales: { label: 'Departamento de Mercados Internacionales', short: 'Mercados Int.', color: '#eab308' },
@@ -22,10 +29,22 @@ export type Zone = {
   /** Labels drawn outside the zone use the department color instead of white. */
   labelOutside?: boolean;
   labelAnchor?: 'start' | 'middle' | 'end';
+  /** Rotation of the label in degrees around its anchor, e.g. -90 for a vertical strip. */
+  labelRotate?: number;
 };
 
 export const ZONES: Zone[] = [
-  { id: 'ia', department: 'ia_cfd', points: '0,0 340,0 340,28 28,28 28,190 0,190', label: "IA y CFD's", labelX: 167.5, labelY: 16 },
+  { id: 'ia', department: 'ia_cfd', points: '0,0 340,0 340,28 0,28', label: "IA y CFD's", labelX: 167.5, labelY: 16 },
+  // Left column (IA-7 to IA-10): the label runs vertically beside the computers.
+  {
+    id: 'externos',
+    department: 'operadores_externos',
+    points: '0,28 28,28 28,190 0,190',
+    label: 'OPERADORES EXTERNOS',
+    labelX: 25.5,
+    labelY: 110,
+    labelRotate: -90,
+  },
   { id: 'sub-ia', department: 'ia_cfd', points: '68,92 122,92 122,120 76,120', label: 'SUB-IA', labelX: 82, labelY: 87, labelOutside: true },
   {
     id: 'nuevo',
@@ -63,7 +82,8 @@ const station = (id: string, department: DepartmentKey, x: number, y: number): S
 
 export const STATIONS: Station[] = [
   ...[40, 85, 130, 205, 250, 295].map((x, i) => station(`IA-${i + 1}`, 'ia_cfd', x, 14)),
-  ...[56, 92, 128, 164].map((y, i) => station(`IA-${i + 7}`, 'ia_cfd', 14, y)),
+  // Ids kept as IA-7..IA-10 so members already assigned there stay in place.
+  ...[56, 92, 128, 164].map((y, i) => station(`IA-${i + 7}`, 'operadores_externos', 14, y)),
   station('IA-11', 'ia_cfd', 99, 108),
   station('NA-1', 'nuevo_acciones', 208, 106),
   station('NA-2', 'nuevo_acciones', 113, 138),

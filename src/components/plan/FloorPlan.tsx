@@ -51,7 +51,8 @@ export function FloorPlan({ membersByStation, selectedStationId, highlighted, on
               x={zone.labelX}
               y={zone.labelY}
               textAnchor={zone.labelAnchor ?? 'middle'}
-              fontSize={zone.labelOutside ? 4.6 : 5.4}
+              transform={zone.labelRotate ? `rotate(${zone.labelRotate} ${zone.labelX} ${zone.labelY})` : undefined}
+              fontSize={zone.labelOutside || zone.labelRotate ? 4.2 : 5.4}
               fontWeight={700}
               fill={zone.labelOutside ? color : '#f8fafc'}
               className="pointer-events-none"

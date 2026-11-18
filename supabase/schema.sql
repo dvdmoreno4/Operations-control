@@ -17,6 +17,7 @@ create table if not exists departments (
 
 insert into departments (key, label, short, color) values
   ('ia_cfd', 'Departamento IA y CFD''s', 'IA y CFD''s', '#84cc16'),
+  ('operadores_externos', 'Operadores externos', 'Op. externos', '#8b5cf6'),
   ('nuevo_acciones', 'Departamento de Nuevo y Acciones', 'Nuevo y Acciones', '#14b8a6'),
   ('materias_primas', 'Departamento de Materias primas y coberturas', 'Materias primas', '#f97316'),
   ('mercados_internacionales', 'Departamento de Mercados Internacionales', 'Mercados Int.', '#eab308'),
@@ -30,7 +31,8 @@ create table if not exists stations (
 
 insert into stations (id, department_key) values
   ('IA-1', 'ia_cfd'), ('IA-2', 'ia_cfd'), ('IA-3', 'ia_cfd'), ('IA-4', 'ia_cfd'), ('IA-5', 'ia_cfd'),
-  ('IA-6', 'ia_cfd'), ('IA-7', 'ia_cfd'), ('IA-8', 'ia_cfd'), ('IA-9', 'ia_cfd'), ('IA-10', 'ia_cfd'),
+  ('IA-6', 'ia_cfd'),
+  ('IA-7', 'operadores_externos'), ('IA-8', 'operadores_externos'), ('IA-9', 'operadores_externos'), ('IA-10', 'operadores_externos'),
   ('IA-11', 'ia_cfd'),
   ('NA-1', 'nuevo_acciones'), ('NA-2', 'nuevo_acciones'), ('NA-3', 'nuevo_acciones'),
   ('MP-1', 'materias_primas'),
