@@ -8,6 +8,9 @@ import { IbReportSection } from './ib/IbReportSection';
 import { ProjectsSection } from './ProjectsSection';
 import { RequestsSection } from './RequestsSection';
 import { ScoreBar } from './ScoreBar';
+import { SemesterProgress } from './StatsPanels';
+import { cn } from '../../lib/cn';
+import { average, monthsOf, semesterLabel, semesterOf } from '../../lib/semester';
 
 type Shared = { onChanged: () => Promise<void>; onError: (error: unknown) => void };
 
@@ -144,6 +147,10 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
         <p className="text-sm text-ink/60">Cargando expediente...</p>
       ) : (
         <>
+          <SemesterKpi records={records} period={period} onSelect={setPeriod} />
+          <h4 className="text-[11px] font-mono uppercase tracking-widest text-accent">
+            KPI mensual · <span className="capitalize">{monthLabel(period)}</span>
+          </h4>
           <ScoreBar values={record ?? EMPTY_KPIS} />
           {record ? <KpiTiles record={record} /> : <p className="text-sm text-ink/60">Sin KPIs registrados para {monthLabel(period)}.</p>}
           <KpiForm
@@ -194,6 +201,41 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
         }}
         onError={onError}
       />
+    </div>
+  );
+}
+
+/** Individual semester KPI: average of the months with a record, semester progress and a strip per month. */
+function SemesterKpi({ records, period, onSelect }: { records: KpiRecord[]; period: string; onSelect: (period: string) => void }) {
+  const semester = semesterOf(period);
+  const months = monthsOf(semester);
+  const byMonth = new Map(records.map((r) => [r.period, totalScore(r)]));
+  const avgScore = average(months.map((m) => byMonth.get(m)));
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-[11px] font-mono uppercase tracking-widest text-accent">KPI semestral · {semesterLabel(semester)}</h4>
+      <SemesterProgress semester={semester} avgScore={avgScore} />
+      <div className="grid grid-cols-6 gap-1" role="group" aria-label="Meses del semestre">
+        {months.map((m) => {
+          const score = byMonth.get(m);
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onSelect(m)}
+              aria-pressed={m === period}
+              className={cn(
+                'rounded-md border px-1 py-1 text-center text-[10px] leading-tight',
+                m === period ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/60',
+              )}
+            >
+              <span className="block capitalize text-ink/60">{new Date(`${m}-01T00:00:00Z`).toLocaleDateString('es', { month: 'short', timeZone: 'UTC' })}</span>
+              <span className="block font-semibold tabular-nums">{score ?? '-'}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

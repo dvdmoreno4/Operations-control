@@ -62,7 +62,8 @@ export function ActivitiesSection({ memberId, period, admin, onScoreChanged, onE
           </span>
         </div>
         <p className="mt-1 text-ink/60">
-          Cada tipo realizado al menos una vez en el mes suma su porcentaje. Pesa un {EXTRA_WEIGHT}% en la calificación total del KPI.
+          Una sola calificación para todos los tipos: 100 si realizó al menos una actividad en el mes (lleva {score.doneCount}), 0 si no.
+          Pesa un {EXTRA_WEIGHT}% en la calificación global individual.
         </p>
       </div>
 
@@ -72,14 +73,14 @@ export function ActivitiesSection({ memberId, period, admin, onScoreChanged, onE
         <ul className="space-y-2">
           {ACTIVITY_KINDS.map((kind) => {
             const list = month.filter((a) => a.kind === kind);
-            const earned = score.doneKinds.includes(kind);
+            const done = list.filter((x) => x.done).length;
             return (
               <li key={kind} className="space-y-2 rounded-lg border border-border p-3 text-xs">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold">
                     {ACTIVITY_INFO[kind].label}{' '}
-                    <span className={cn('text-xs font-normal', earned ? 'text-accent' : 'text-ink/50')}>
-                      · {ACTIVITY_INFO[kind].pct}%{earned ? ' sumado' : ''}
+                    <span className="text-xs font-normal text-ink/50">
+                      · {done} de {list.length} realizadas
                     </span>
                   </p>
                   {adding !== kind && (

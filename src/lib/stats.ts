@@ -46,6 +46,38 @@ export type GroupStats = {
 
 const round1 = (value: number) => Math.round(value * 10) / 10;
 
+/**
+ * One record per member out of several months (a semester): score segments and P&L % averaged over
+ * the months with a record, amounts and counts added up. Since the total score is a weighted sum of
+ * the segments, the result's total score is the average of the monthly totals.
+ */
+export function aggregateByMember(records: MemberRecord[]): MemberRecord[] {
+  const byMember = new Map<string, MemberRecord[]>();
+  for (const r of records) byMember.set(r.memberId, [...(byMember.get(r.memberId) ?? []), r]);
+
+  return [...byMember.entries()].map(([memberId, list]) => {
+    const avg = (pick: (r: KpiRecord) => number) => round1(list.reduce((s, r) => s + pick(r), 0) / list.length);
+    const sum = (pick: (r: KpiRecord) => number) => list.reduce((s, r) => s + pick(r), 0);
+    return {
+      memberId,
+      period: list.map((r) => r.period).sort().at(-1) ?? '',
+      operationsCount: sum((r) => r.operationsCount),
+      volume: sum((r) => r.volume),
+      pnl: sum((r) => r.pnl),
+      pnlPct: avg((r) => r.pnlPct),
+      goal: sum((r) => r.goal),
+      achieved: sum((r) => r.achieved),
+      errors: sum((r) => r.errors),
+      incidents: sum((r) => r.incidents),
+      scoreOperational: avg((r) => r.scoreOperational),
+      scoreProjects: avg((r) => r.scoreProjects),
+      scoreScreenTime: avg((r) => r.scoreScreenTime),
+      scoreExtra: avg((r) => r.scoreExtra),
+      notes: '',
+    };
+  });
+}
+
 export function stationStats(members: Member[], records: MemberRecord[]): StationStat[] {
   const memberByStation = new Map(members.map((m) => [m.stationId, m]));
   const recordByMember = new Map(records.map((r) => [r.memberId, r]));

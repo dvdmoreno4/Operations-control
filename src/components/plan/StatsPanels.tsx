@@ -2,17 +2,27 @@ import type { ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { DEPARTMENTS, DEPARTMENT_KEYS, type DepartmentKey } from '../../lib/floorplan';
 import { compliance, SCORE_SEGMENTS } from '../../lib/kpis';
+import { elapsedMonths, semesterLabel } from '../../lib/semester';
 import { groupStats, rankInDepartment, statsOfDepartment, type GroupStats, type StationStat } from '../../lib/stats';
 import { inputClass, money, secondaryButton, SignedMoney, TableFrame, Td, Th } from '../ui';
 import { monthLabel } from './MemberPanel';
+
+export type StatsMode = 'mensual' | 'semestral';
 
 type Props = {
   stats: StationStat[];
   department: DepartmentKey | null;
   onDepartment: (department: DepartmentKey | null) => void;
+  mode: StatsMode;
+  onMode: (mode: StatsMode) => void;
+  /** Month shown in monthly mode (null in semester mode or without data). */
   period: string | null;
   periods: string[];
   onPeriod: (period: string) => void;
+  /** Semester shown in semester mode, e.g. "2026-H2". */
+  semester: string;
+  semesters: string[];
+  onSemester: (semester: string) => void;
   selectedStationId: string | null;
   onSelectStation: (stationId: string) => void;
   loading: boolean;
@@ -67,14 +77,23 @@ function ScoreMeter({ score, color = '#283d8c' }: { score: number | null; color?
 const complianceText = (rate: number | null) => (rate === null ? 'Sin meta' : `${rate}%`);
 const complianceClass = (rate: number | null) => (rate === null ? 'text-ink/50' : rate < 100 ? 'text-danger' : 'text-accent');
 
-function DepartmentStats({ stats, department, onDepartment, period, periods, onPeriod, loading }: Props) {
+function DepartmentStats({ stats, department, onDepartment, mode, onMode, period, periods, onPeriod, semester, semesters, onSemester, loading }: Props) {
   const group = groupStats(statsOfDepartment(stats, department));
   const title = department ? DEPARTMENTS[department].label : 'Todos los departamentos';
+  const periodText = mode === 'semestral' ? semesterLabel(semester) : period ? monthLabel(period) : null;
 
-  const periodSelect =
-    periods.length > 0 ? (
+  const select =
+    mode === 'semestral' ? (
+      <select aria-label="Semestre" className={cn(inputClass, 'w-auto py-1 text-xs')} value={semester} onChange={(e) => onSemester(e.target.value)}>
+        {semesters.map((s) => (
+          <option key={s} value={s}>
+            {semesterLabel(s)}
+          </option>
+        ))}
+      </select>
+    ) : periods.length > 0 ? (
       <select
-        aria-label="Periodo de las estadísticas"
+        aria-label="Mes de las estadísticas"
         className={cn(inputClass, 'w-auto py-1 text-xs capitalize')}
         value={period ?? ''}
         onChange={(e) => onPeriod(e.target.value)}
@@ -87,8 +106,27 @@ function DepartmentStats({ stats, department, onDepartment, period, periods, onP
       </select>
     ) : null;
 
+  const aside = (
+    <div className="flex items-center gap-2">
+      <div className="flex overflow-hidden rounded-full border border-border text-[11px]" role="group" aria-label="Periodo">
+        {(['mensual', 'semestral'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            aria-pressed={mode === m}
+            onClick={() => onMode(m)}
+            className={cn('px-2.5 py-1 capitalize', mode === m ? 'bg-accent text-bg' : 'text-ink/70 hover:bg-border/40')}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+      {select}
+    </div>
+  );
+
   return (
-    <Panel title="Estadísticas del departamento" aside={periodSelect}>
+    <Panel title="Estadísticas del departamento" aside={aside}>
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Departamento">
         <Chip active={department === null} onClick={() => onDepartment(null)}>
           Todos
@@ -102,20 +140,55 @@ function DepartmentStats({ stats, department, onDepartment, period, periods, onP
 
       <p className="text-sm font-semibold">
         {title}
-        {period && <span className="font-normal text-ink/60 capitalize"> · {monthLabel(period)}</span>}
+        {periodText && <span className="font-normal text-ink/60 capitalize"> · {periodText}</span>}
       </p>
 
       {loading ? (
         <p className="text-sm text-ink/60">Cargando estadísticas...</p>
       ) : (
         <>
+          {mode === 'semestral' && <SemesterProgress semester={semester} avgScore={group.avgScore} />}
           <GroupTiles group={group} />
-          {period === null && <p className="text-xs text-ink/60">Todavía no hay KPIs registrados. Las cifras se llenan al registrar KPIs en los expedientes.</p>}
+          {group.reporting === 0 && (
+            <p className="text-xs text-ink/60">Sin KPIs registrados en este periodo. Las cifras se llenan al registrar KPIs en los expedientes.</p>
+          )}
           <SegmentAverages group={group} />
           {department === null && <DepartmentComparison stats={stats} onDepartment={onDepartment} />}
         </>
       )}
     </Panel>
+  );
+}
+
+/** Semester progress: months elapsed out of 6 and the semester's average KPI score. */
+export function SemesterProgress({ semester, avgScore }: { semester: string; avgScore: number | null }) {
+  const elapsed = elapsedMonths(semester);
+  return (
+    <div className="space-y-2 rounded-lg border border-border px-3 py-2 text-xs">
+      <ProgressRow label="Avance del semestre" value={(elapsed / 6) * 100} text={`${elapsed} de 6 meses`} color="#94a3b8" />
+      <ProgressRow label="KPI semestral (promedio)" value={avgScore ?? 0} text={avgScore === null ? 'Sin datos' : `${avgScore} / 100`} color="#283d8c" />
+    </div>
+  );
+}
+
+function ProgressRow({ label, value, text, color }: { label: string; value: number; text: string; color: string }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] font-mono uppercase tracking-wider text-ink/60">{label}</span>
+        <span className="font-semibold tabular-nums">{text}</span>
+      </div>
+      <div
+        className="h-2 overflow-hidden rounded-full bg-border/60"
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(value)}
+      >
+        <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${Math.min(100, value)}%`, backgroundColor: color }} />
+      </div>
+    </div>
   );
 }
 

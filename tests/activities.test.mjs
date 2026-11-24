@@ -6,14 +6,15 @@ import { SCORE_SEGMENTS, totalScore } from '../src/lib/kpis.ts';
 
 const a = (kind, done, period = '2026-11') => ({ kind, done, period });
 
-test('activity shares add up to 100', () => {
-  assert.equal(ACTIVITY_KINDS.reduce((sum, k) => sum + ACTIVITY_INFO[k].pct, 0), 100);
+test('every kind has a label', () => {
+  assert.ok(ACTIVITY_KINDS.every((k) => ACTIVITY_INFO[k].label));
 });
 
-test('each kind done at least once in the month adds its share once', () => {
-  const result = activityScore([a('colaboracion_comercial', true), a('colaboracion_comercial', true), a('conversatorio', true)], '2026-11');
-  assert.equal(result.score, 50);
-  assert.deepEqual(result.doneKinds, ['colaboracion_comercial', 'conversatorio']);
+test('one grade for any kind: one done activity in the month gives 100', () => {
+  for (const kind of ACTIVITY_KINDS) assert.equal(activityScore([a(kind, true)], '2026-11').score, 100);
+  const result = activityScore([a('colaboracion_comercial', true), a('conversatorio', true), a('proyecto_adicional', false)], '2026-11');
+  assert.equal(result.score, 100);
+  assert.equal(result.doneCount, 2);
 });
 
 test('not done activities and other months add nothing', () => {

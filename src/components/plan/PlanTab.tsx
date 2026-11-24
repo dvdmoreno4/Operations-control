@@ -3,18 +3,22 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiClientError, errorMessage } from '../../lib/apiClient';
 import { STATIONS, type DepartmentKey } from '../../lib/floorplan';
 import type { Member } from '../../lib/kpis';
-import { stationStats, type PeriodKpis } from '../../lib/stats';
+import { semesterOf, semestersOf } from '../../lib/semester';
+import { aggregateByMember, stationStats, type PeriodKpis } from '../../lib/stats';
 import { Alert, secondaryButton } from '../ui';
 import { FloorPlan, Legend } from './FloorPlan';
 import { MemberPanel } from './MemberPanel';
 import { StationPopover } from './StationPopover';
-import { StatsPanels } from './StatsPanels';
+import { StatsPanels, type StatsMode } from './StatsPanels';
 
 export function PlanTab({ onLogout, admin }: { onLogout: () => Promise<void>; admin: boolean }) {
   const [members, setMembers] = useState<Member[] | null>(null);
   const [kpis, setKpis] = useState<PeriodKpis | null>(null);
   /** Month picked in the stats panel. Null means the most recent month with data. */
   const [period, setPeriod] = useState<string | null>(null);
+  /** Global KPIs by month or by semester. */
+  const [mode, setMode] = useState<StatsMode>('semestral');
+  const [semester, setSemester] = useState(() => semesterOf(new Date().toISOString().slice(0, 7)));
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   /** Station whose edit popover is open on the plan. */
   const [popoverStationId, setPopoverStationId] = useState<string | null>(null);
@@ -40,11 +44,12 @@ export function PlanTab({ onLogout, admin }: { onLogout: () => Promise<void>; ad
 
   const loadKpis = useCallback(async () => {
     try {
-      setKpis(await api<PeriodKpis>(period ? `/api/kpis?period=${period}` : '/api/kpis'));
+      const url = mode === 'semestral' ? `/api/kpis?semester=${semester}` : period ? `/api/kpis?period=${period}` : '/api/kpis';
+      setKpis(await api<PeriodKpis>(url));
     } catch (e) {
       handleError(e);
     }
-  }, [period, handleError]);
+  }, [mode, semester, period, handleError]);
 
   useEffect(() => {
     void loadMembers();
@@ -66,7 +71,15 @@ export function PlanTab({ onLogout, admin }: { onLogout: () => Promise<void>; ad
   const closePopover = useCallback(() => setPopoverStationId(null), []);
 
   const membersByStation = useMemo(() => new Map((members ?? []).map((m) => [m.stationId, m])), [members]);
-  const stats = useMemo(() => stationStats(members ?? [], kpis?.records ?? []), [members, kpis]);
+  const stats = useMemo(() => {
+    const records = kpis?.records ?? [];
+    return stationStats(members ?? [], mode === 'semestral' ? aggregateByMember(records) : records);
+  }, [members, kpis, mode]);
+  const semesters = useMemo(() => {
+    const list = semestersOf(kpis?.periods ?? []);
+    const current = semesterOf(new Date().toISOString().slice(0, 7));
+    return list.includes(current) ? list : [current, ...list];
+  }, [kpis]);
   const occupied = members?.length ?? 0;
 
   return (
@@ -145,9 +158,14 @@ export function PlanTab({ onLogout, admin }: { onLogout: () => Promise<void>; ad
             stats={stats}
             department={highlighted}
             onDepartment={setHighlighted}
-            period={kpis?.period ?? null}
+            mode={mode}
+            onMode={setMode}
+            period={mode === 'mensual' ? (kpis?.period ?? null) : null}
             periods={kpis?.periods ?? []}
             onPeriod={setPeriod}
+            semester={semester}
+            semesters={semesters}
+            onSemester={setSemester}
             selectedStationId={selectedStationId}
             onSelectStation={setSelectedStationId}
             loading={members === null || kpis === null}
