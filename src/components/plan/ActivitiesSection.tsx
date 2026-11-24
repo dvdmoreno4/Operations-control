@@ -1,9 +1,8 @@
 import { Check, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { ACTIVITY_INFO, ACTIVITY_KINDS, activityScore, type ActivityKind, type MemberActivity } from '../../lib/activities';
+import { ACTIVITY_INFO, ACTIVITY_KINDS, activityBonus, MAX_ACTIVITY_BONUS, type ActivityKind, type MemberActivity } from '../../lib/activities';
 import { api } from '../../lib/apiClient';
 import { cn } from '../../lib/cn';
-import { SCORE_SEGMENTS } from '../../lib/kpis';
 import { inputClass, primaryButton, rowAction, secondaryButton } from '../ui';
 import { monthLabel } from './MemberPanel';
 
@@ -17,7 +16,7 @@ type Props = {
   onError: (error: unknown) => void;
 };
 
-const EXTRA_WEIGHT = Math.round((SCORE_SEGMENTS.find((s) => s.key === 'scoreExtra')?.weight ?? 0) * 100);
+const points = (n: number) => `+${String(n).replace('.', ',')}`;
 
 export function ActivitiesSection({ memberId, period, admin, onScoreChanged, onError }: Props) {
   const [items, setItems] = useState<MemberActivity[] | null>(null);
@@ -45,7 +44,7 @@ export function ActivitiesSection({ memberId, period, admin, onScoreChanged, onE
   }
 
   const month = useMemo(() => (items ?? []).filter((a) => a.period === period), [items, period]);
-  const score = activityScore(month, period);
+  const score = activityBonus(month, period);
 
   return (
     <div className="space-y-3">
@@ -54,16 +53,16 @@ export function ActivitiesSection({ memberId, period, admin, onScoreChanged, onE
       <div className="rounded-lg border border-border px-3 py-2 text-xs">
         <div className="flex items-baseline justify-between">
           <span className="text-[10px] font-mono uppercase tracking-wider text-ink/60">
-            Puntuación de <span className="capitalize">{monthLabel(period)}</span>
+            Plus de <span className="capitalize">{monthLabel(period)}</span>
           </span>
-          <span className="text-sm font-semibold tabular-nums">
-            {score.score}
-            <span className="text-xs font-normal text-ink/50"> / 100</span>
+          <span className="text-sm font-semibold tabular-nums text-accent">
+            {points(score.bonus)}
+            <span className="text-xs font-normal text-ink/50"> pts (máx. {MAX_ACTIVITY_BONUS})</span>
           </span>
         </div>
         <p className="mt-1 text-ink/60">
-          Una sola calificación para todos los tipos: 100 si realizó al menos una actividad en el mes (lleva {score.doneCount}), 0 si no.
-          Pesa un {EXTRA_WEIGHT}% en la calificación global individual.
+          Es un adicional que se suma encima del KPI central (operativa, proyectos y pantalla); quien no hace estas actividades no pierde
+          puntos. Cada actividad realizada suma sus puntos ({score.doneCount} realizadas este mes).
         </p>
       </div>
 
@@ -80,7 +79,7 @@ export function ActivitiesSection({ memberId, period, admin, onScoreChanged, onE
                   <p className="text-sm font-semibold">
                     {ACTIVITY_INFO[kind].label}{' '}
                     <span className="text-xs font-normal text-ink/50">
-                      · {done} de {list.length} realizadas
+                      · {points(ACTIVITY_INFO[kind].bonus)} por actividad · {done} de {list.length} realizadas
                     </span>
                   </p>
                   {adding !== kind && (

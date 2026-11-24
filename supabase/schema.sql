@@ -386,7 +386,7 @@ alter table project_collaborators enable row level security;
 -- Migration 006 (also in supabase/migrations/006_actividades_extraordinarias.sql)
 ------------------------------------------------------------------------------------------------
 
--- Fourth segment of the total score (0-100): extraordinary activities of the month.
+-- Bonus points of extraordinary activities in the month, added on top of the central KPI (capped at 10 by the app).
 alter table kpi_records add column if not exists score_extra numeric(5, 2) not null default 0 check (score_extra between 0 and 100);
 
 create table if not exists member_activities (

@@ -32,7 +32,7 @@ const record = (memberId, period, scores, pnl) => ({
   scoreOperational: scores,
   scoreProjects: scores,
   scoreScreenTime: scores,
-  scoreExtra: scores,
+  scoreExtra: 0,
   notes: '',
 });
 

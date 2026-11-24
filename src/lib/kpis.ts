@@ -32,7 +32,7 @@ export type KpiValues = {
   scoreOperational: number;
   scoreProjects: number;
   scoreScreenTime: number;
-  /** Extraordinary activities and collaborations of the month (0-100). */
+  /** Bonus points of extraordinary activities in the month, added on top of the central KPI (0-10). */
   scoreExtra: number;
   notes: string;
 };
@@ -40,17 +40,24 @@ export type KpiValues = {
 /** period is the month as YYYY-MM. */
 export type KpiRecord = KpiValues & { period: string };
 
-/** Segments of the total score. Weights must add up to 1. */
+/** Segments of the central KPI. Weights must add up to 1. */
 export const SCORE_SEGMENTS = [
-  { key: 'scoreOperational', label: 'Resultados operativos', weight: 0.3, color: '#283d8c' },
-  { key: 'scoreProjects', label: 'Proyectos', weight: 0.3, color: '#14b8a6' },
-  { key: 'scoreScreenTime', label: 'Tiempo en pantalla', weight: 0.3, color: '#eab308' },
-  { key: 'scoreExtra', label: 'Actividades extraordinarias', weight: 0.1, color: '#8b5cf6' },
+  { key: 'scoreOperational', label: 'Resultados operativos', weight: 1 / 3, color: '#283d8c' },
+  { key: 'scoreProjects', label: 'Proyectos', weight: 1 / 3, color: '#14b8a6' },
+  { key: 'scoreScreenTime', label: 'Tiempo en pantalla', weight: 1 / 3, color: '#eab308' },
 ] as const satisfies readonly { key: keyof KpiValues; label: string; weight: number; color: string }[];
 
-export function totalScore(values: Pick<KpiValues, (typeof SCORE_SEGMENTS)[number]['key']>): number {
+type ScoreInput = Pick<KpiValues, (typeof SCORE_SEGMENTS)[number]['key']> & { scoreExtra?: number };
+
+/** Central KPI: weighted average of operativa, proyectos and pantalla (0-100). */
+export function centralScore(values: ScoreInput): number {
   const total = SCORE_SEGMENTS.reduce((sum, segment) => sum + values[segment.key] * segment.weight, 0);
   return Math.round(total * 10) / 10;
+}
+
+/** Total score: central KPI plus the extraordinary activities bonus, capped at 100. */
+export function totalScore(values: ScoreInput): number {
+  return Math.min(100, Math.round((centralScore(values) + (values.scoreExtra ?? 0)) * 10) / 10);
 }
 
 /** Achieved over goal, in percent. Null when there is no goal. */
