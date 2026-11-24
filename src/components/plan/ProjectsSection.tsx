@@ -6,12 +6,12 @@ import { PROJECTS_PER_SEMESTER_GOAL, PROJECTS_PER_YEAR_GOAL } from '../../lib/go
 import type { Member } from '../../lib/kpis';
 import { semesterLabel } from '../../lib/semester';
 import {
-  COLLABORATOR_SHARE,
+  COLLAB_BONUS_PER_PROJECT,
+  MAX_COLLAB_BONUS,
+  memberProjectScores,
   MAX_MANUAL_PROGRESS,
   PROJECT_STATUSES,
   progressOf,
-  projectScore,
-  shareOf,
   STATUS_INFO,
   type Project,
   type ProjectStatus,
@@ -57,10 +57,8 @@ export function ProjectsSection({ memberId, period, admin, members, onScoreChang
     void load();
   }, [load]);
 
-  const score = useMemo(
-    () => (projects ? projectScore(projects.map((p) => ({ ...p, share: shareOf(p, memberId) })), period) : null),
-    [projects, period, memberId],
-  );
+  const scores = useMemo(() => (projects ? memberProjectScores(projects, memberId, period) : null), [projects, period, memberId]);
+  const score = scores?.owned ?? null;
 
   const changed = useCallback(async () => {
     await Promise.all([load(), onScoreChanged()]);
@@ -92,13 +90,21 @@ export function ProjectsSection({ memberId, period, admin, members, onScoreChang
             <div className="h-full rounded-full bg-[#14b8a6]" style={{ width: `${score.score}%` }} />
           </div>
           <p className="mt-1.5 text-ink/60">
-            Meta: mínimo {PROJECTS_PER_SEMESTER_GOAL} proyecto culminado por semestre y {PROJECTS_PER_YEAR_GOAL} al año. Cada proyecto activo suma su
-            avance (50% aceptado, 75% producción, 100% culminado); como colaborador suma el {Math.round(COLLABORATOR_SHARE * 100)}%.
+            Meta: mínimo {PROJECTS_PER_SEMESTER_GOAL} proyecto propio culminado por semestre y {PROJECTS_PER_YEAR_GOAL} al año. Cada proyecto propio
+            activo suma su avance (50% aceptado, 75% producción, 100% culminado).
           </p>
           <p className="mt-1 font-semibold">
             Culminados: {score.completedInSemester} de {PROJECTS_PER_SEMESTER_GOAL} en el semestre · {score.completedInYear} de {PROJECTS_PER_YEAR_GOAL} en{' '}
             {period.slice(0, 4)}
           </p>
+          {scores && (
+            <p className="mt-2 border-t border-border pt-2 text-ink/70">
+              <span className="font-semibold text-violet-700">Plus por colaboración: +{scores.collabBonus}</span> sobre el KPI central (+
+              {COLLAB_BONUS_PER_PROJECT} por cada proyecto de otro compañero en el que colabora, según su avance; máx. +{MAX_COLLAB_BONUS}).
+              {scores.collaborations.length > 0 &&
+                ` Colabora en: ${scores.collaborations.map((c) => `${c.project} (${c.progress}%)`).join(', ')}.`}
+            </p>
+          )}
         </div>
       )}
 
@@ -257,7 +263,7 @@ function ProjectCard({
         <div className="min-w-0">
           <p className="text-sm font-semibold">{project.name}</p>
           <p className="text-[11px] text-ink/60">
-            {owned ? 'Dueño del proyecto' : `Colaborador (${Math.round(COLLABORATOR_SHARE * 100)}% de los puntos) · dueño: ${project.ownerName}`}
+            {owned ? 'Dueño del proyecto' : `Colaborador (suma plus al KPI central) · dueño: ${project.ownerName}`}
           </p>
           {project.description && <p className="whitespace-pre-wrap text-xs text-ink/70">{project.description}</p>}
         </div>

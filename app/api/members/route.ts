@@ -10,7 +10,8 @@ export const GET = route(async (): Promise<{ members: Member[] }> => {
     client.from('members').select('id, station_id, name, role, department_key').order('station_id'),
     client
       .from('kpi_records')
-      .select('member_id, period, score_operational, score_projects, score_screen_time, score_extra')
+      // '*' so a column added by a pending migration never breaks the plan.
+      .select('*')
       .order('period', { ascending: false }),
     client.from('member_requests').select('member_id').eq('kind', 'solicitud').in('status', ['pendiente', 'en_proceso']),
   ]);

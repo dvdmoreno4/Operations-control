@@ -1,7 +1,8 @@
 // Run with: npm test
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { COLLABORATOR_SHARE, projectScore, shareOf } from '../src/lib/projects.ts';
+import { totalScore } from '../src/lib/kpis.ts';
+import { COLLAB_BONUS_PER_PROJECT, COLLABORATOR_SHARE, MAX_COLLAB_BONUS, memberProjectScores, projectScore, shareOf } from '../src/lib/projects.ts';
 
 const ev = (status, progress, at) => ({ status, progress, at });
 
@@ -39,7 +40,7 @@ test('projects created after the month do not count', () => {
   assert.equal(projectScore([later], '2026-11').score, 0);
 });
 
-test('collaborators earn a share of the project progress, others nothing', () => {
+test('collaborating adds a bonus on top of the central KPI; the project score counts only owned projects', () => {
   const project = {
     name: 'A',
     memberId: 'owner',
@@ -48,9 +49,22 @@ test('collaborators earn a share of the project progress, others nothing', () =>
   };
   assert.equal(shareOf(project, 'owner'), 1);
   assert.equal(shareOf(project, 'helper'), COLLABORATOR_SHARE);
-  assert.equal(shareOf(project, 'stranger'), 0);
 
-  assert.equal(projectScore([{ ...project, share: 1 }], '2026-11').score, 50);
-  assert.equal(projectScore([{ ...project, share: COLLABORATOR_SHARE }], '2026-11').score, 50 * COLLABORATOR_SHARE);
-  assert.equal(projectScore([{ ...project, share: 0 }], '2026-11').score, 0);
+  const owner = memberProjectScores([project], 'owner', '2026-11');
+  assert.equal(owner.owned.score, 50);
+  assert.equal(owner.collabBonus, 0);
+
+  const helper = memberProjectScores([project], 'helper', '2026-11');
+  assert.equal(helper.owned.score, 0);
+  assert.equal(helper.collabBonus, COLLAB_BONUS_PER_PROJECT * 0.5);
+
+  const stranger = memberProjectScores([project], 'stranger', '2026-11');
+  assert.equal(stranger.owned.score + stranger.collabBonus, 0);
+});
+
+test('the collaboration bonus is capped and adds to the total score', () => {
+  const done = (name) => ({ name, memberId: 'other', collaborators: [{ memberId: 'me', name: 'Yo' }], events: [ev('culminado', 100, '2026-09-01T10:00:00Z')] });
+  const { collabBonus } = memberProjectScores([done('A'), done('B'), done('C')], 'me', '2026-11');
+  assert.equal(collabBonus, MAX_COLLAB_BONUS);
+  assert.equal(totalScore({ scoreOperational: 60, scoreProjects: 60, scoreScreenTime: 60, scoreExtra: 0, scoreCollab: 5 }), 65);
 });

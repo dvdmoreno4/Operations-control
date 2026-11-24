@@ -73,6 +73,7 @@ export function aggregateByMember(records: MemberRecord[]): MemberRecord[] {
       scoreProjects: avg((r) => r.scoreProjects),
       scoreScreenTime: avg((r) => r.scoreScreenTime),
       scoreExtra: avg((r) => r.scoreExtra),
+      scoreCollab: avg((r) => r.scoreCollab ?? 0),
       notes: '',
     };
   });

@@ -16,8 +16,13 @@ export const STATUS_INFO: Record<ProjectStatus, { label: string; progress: numbe
 /** Highest progress a member can set by hand; 50 is reserved for the "aceptado" milestone. */
 export const MAX_MANUAL_PROGRESS = 49;
 
-/** Share of a project's progress a collaborator earns (the owner earns all of it). */
+/** Share of a project's progress a collaborator earns in the collaboration bonus (relative to its owner). */
 export const COLLABORATOR_SHARE = 0.5;
+
+/** Bonus on top of the central KPI for each collaborated project at 100% progress (pro rata below). */
+export const COLLAB_BONUS_PER_PROJECT = 5;
+/** Most collaboration bonus a month. */
+export const MAX_COLLAB_BONUS = 10;
 
 export type ProjectEvent = { status: ProjectStatus; progress: number; at: string };
 export type ProjectFile = { id: string; name: string; size: number; uploadedAt: string };
@@ -65,6 +70,8 @@ export function shareOf(project: Pick<Project, 'memberId' | 'collaborators'>, me
   if (project.memberId === memberId) return 1;
   return project.collaborators.some((c) => c.memberId === memberId) ? COLLABORATOR_SHARE : 0;
 }
+
+const round1 = (v: number) => Math.round(v * 10) / 10;
 
 const monthStart = (period: string) => {
   const [year, month] = period.split('-').map(Number);
@@ -120,7 +127,6 @@ export function projectScore(projects: (Pick<Project, 'name' | 'events'> & { sha
     counted.push({ project: project.name, progress: last.progress, share });
   }
 
-  const round1 = (v: number) => Math.round(v * 10) / 10;
   return {
     score: Math.min(100, round1(points / PROJECTS_PER_SEMESTER_GOAL)),
     semester,
@@ -129,4 +135,27 @@ export function projectScore(projects: (Pick<Project, 'name' | 'events'> & { sha
     completedInYear: round1(completedInYear),
     counted,
   };
+}
+
+/**
+ * Member's scores from projects for a month: the project score counts only the projects they own
+ * (goal: one completed a semester); collaborating on other members' projects adds a bonus on top of
+ * the central KPI, COLLAB_BONUS_PER_PROJECT per project at its progress (50% -> +2.5), capped at
+ * MAX_COLLAB_BONUS. Projects completed before the semester began do not count.
+ */
+export function memberProjectScores(
+  projects: Pick<Project, 'name' | 'events' | 'memberId' | 'collaborators'>[],
+  memberId: string,
+  period: string,
+): { owned: ProjectScore; collabBonus: number; collaborations: ProjectScore['counted'] } {
+  const owned = projectScore(
+    projects.filter((p) => p.memberId === memberId),
+    period,
+  );
+  const collab = projectScore(
+    projects.filter((p) => p.memberId !== memberId && p.collaborators.some((c) => c.memberId === memberId)),
+    period,
+  );
+  const collabBonus = Math.min(MAX_COLLAB_BONUS, round1((collab.points / 100) * COLLAB_BONUS_PER_PROJECT));
+  return { owned, collabBonus, collaborations: collab.counted };
 }

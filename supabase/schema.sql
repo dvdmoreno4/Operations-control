@@ -429,3 +429,9 @@ alter table kpi_records add column if not exists screen_hours numeric(7, 2) chec
 alter table kpi_settings add column if not exists annual_return_goal_pct numeric(6, 2) not null default 25;
 alter table kpi_settings alter column monthly_screen_hours_goal set default 140;
 update kpi_settings set monthly_screen_hours_goal = 140, annual_return_goal_pct = 25;
+
+------------------------------------------------------------------------------------------------
+-- Migration 009 (also in supabase/migrations/009_plus_colaboracion.sql)
+------------------------------------------------------------------------------------------------
+
+alter table kpi_records add column if not exists score_collab numeric(5, 2) not null default 0 check (score_collab between 0 and 100);

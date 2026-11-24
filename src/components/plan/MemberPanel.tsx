@@ -130,7 +130,7 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
   }
 
   const record = records?.find((r) => r.period === period);
-  const values = record ?? EMPTY_KPIS;
+  const values: KpiValues & { scoreCollab?: number } = record ?? EMPTY_KPIS;
   const refresh = async () => {
     await loadRecords();
     await onChanged();
@@ -261,11 +261,12 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
   );
 }
 
-/** Monthly KPI at a glance: total, central KPI, each segment and the activities adjustment. */
-function MonthSummary({ values, period, hasRecord }: { values: KpiValues; period: string; hasRecord: boolean }) {
+/** Monthly KPI at a glance: total, central KPI, each segment, the activities adjustment and the collaboration bonus. */
+function MonthSummary({ values, period, hasRecord }: { values: KpiValues & { scoreCollab?: number }; period: string; hasRecord: boolean }) {
   const total = totalScore(values);
   const central = centralScore(values);
   const extra = values.scoreExtra;
+  const collab = values.scoreCollab ?? 0;
   return (
     <div className="space-y-3 rounded-xl border border-border p-4">
       <div className="flex items-baseline justify-between gap-2">
@@ -299,6 +300,7 @@ function MonthSummary({ values, period, hasRecord }: { values: KpiValues; period
             {extra > 0 ? '+' : '−'} {Math.abs(extra)} actividades extraordinarias
           </span>
         )}
+        {collab > 0 && <span className="font-semibold text-sky-700"> + {collab} colaboración en proyectos</span>}
       </p>
     </div>
   );

@@ -40,8 +40,12 @@ export type KpiValues = {
   notes: string;
 };
 
-/** period is the month as YYYY-MM. screenHours: hours registered for the month, when any. */
-export type KpiRecord = KpiValues & { period: string; screenHours?: number | null };
+/**
+ * period is the month as YYYY-MM. screenHours: hours registered for the month, when any.
+ * scoreCollab: bonus for collaborating on other members' projects, added to the central KPI;
+ * computed from the projects, never typed in the KPI form.
+ */
+export type KpiRecord = KpiValues & { period: string; screenHours?: number | null; scoreCollab?: number };
 
 /** Segments of the central KPI. Weights must add up to 1. */
 export const SCORE_SEGMENTS = [
@@ -50,7 +54,7 @@ export const SCORE_SEGMENTS = [
   { key: 'scoreScreenTime', label: 'Tiempo en pantalla', weight: 1 / 3, color: '#eab308' },
 ] as const satisfies readonly { key: keyof KpiValues; label: string; weight: number; color: string }[];
 
-type ScoreInput = Pick<KpiValues, (typeof SCORE_SEGMENTS)[number]['key']> & { scoreExtra?: number };
+type ScoreInput = Pick<KpiValues, (typeof SCORE_SEGMENTS)[number]['key']> & { scoreExtra?: number; scoreCollab?: number };
 
 /** Central KPI: weighted average of operativa, proyectos and pantalla (0-100). */
 export function centralScore(values: ScoreInput): number {
@@ -58,9 +62,10 @@ export function centralScore(values: ScoreInput): number {
   return Math.round(total * 10) / 10;
 }
 
-/** Total score: central KPI plus the extraordinary activities adjustment, kept within 0-100. */
+/** Total score: central KPI plus the activities adjustment and the project collaboration bonus, kept within 0-100. */
 export function totalScore(values: ScoreInput): number {
-  return Math.max(0, Math.min(100, Math.round((centralScore(values) + (values.scoreExtra ?? 0)) * 10) / 10));
+  const total = centralScore(values) + (values.scoreExtra ?? 0) + (values.scoreCollab ?? 0);
+  return Math.max(0, Math.min(100, Math.round(total * 10) / 10));
 }
 
 /** Achieved over goal, in percent. Null when there is no goal. */
@@ -102,6 +107,7 @@ export function recordFromRow(row: Row): KpiRecord {
     scoreProjects: n('score_projects'),
     scoreScreenTime: n('score_screen_time'),
     scoreExtra: n('score_extra'),
+    scoreCollab: n('score_collab'),
     screenHours: row.screen_hours === null || row.screen_hours === undefined ? null : Number(row.screen_hours),
     notes: String(row.notes ?? ''),
   };

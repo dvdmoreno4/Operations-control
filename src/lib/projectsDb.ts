@@ -1,7 +1,7 @@
 // Server-only helpers for the projects API routes.
 
 import { ApiError, db, parseText, parseUuid, unwrap } from './api';
-import { isProjectStatus, projectScore, shareOf, type Project, type ProjectStatus } from './projects';
+import { isProjectStatus, memberProjectScores, type Project, type ProjectStatus } from './projects';
 
 export const PROJECT_NOT_FOUND = 'Proyecto no encontrado';
 
@@ -88,22 +88,22 @@ export async function projectPeople(projectId: string, ownerId: string): Promise
 export const currentMonth = () => new Date().toISOString().slice(0, 7);
 
 /**
- * Recomputes the project score of these members for a month (owned projects at full share,
- * collaborations at COLLABORATOR_SHARE) and writes it to their KPI record of that month.
+ * Recomputes, for a month, each member's project score (owned projects) and collaboration bonus
+ * (other members' projects) and writes both to their KPI record of that month.
  */
 export async function recomputeProjectScores(memberIds: string[], month = currentMonth()) {
   const client = db();
   for (const memberId of [...new Set(memberIds)]) {
     const projects = await loadProjects(memberId);
-    const { score } = projectScore(
-      projects.map((p) => ({ ...p, share: shareOf(p, memberId) })),
-      month,
-    );
-    unwrap(
-      await client
-        .from('kpi_records')
-        .upsert({ member_id: memberId, period: `${month}-01`, score_projects: score, updated_at: new Date().toISOString() })
-        .select('member_id'),
-    );
+    const { owned, collabBonus } = memberProjectScores(projects, memberId, month);
+    const row = { member_id: memberId, period: `${month}-01`, score_projects: owned.score, updated_at: new Date().toISOString() };
+    const { error } = await client.from('kpi_records').upsert({ ...row, score_collab: collabBonus }).select('member_id');
+    if (error && /score_collab/.test(error.message)) {
+      // Migration 009 not applied yet: keep the project score, skip the bonus.
+      unwrap(await client.from('kpi_records').upsert(row).select('member_id'));
+    } else if (error) {
+      console.error(error.message);
+      throw new ApiError(500, 'Error de base de datos');
+    }
   }
 }
