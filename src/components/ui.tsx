@@ -1,5 +1,48 @@
-import type { ReactNode } from 'react';
+import { ChevronDown, type LucideIcon } from 'lucide-react';
+import { useId, useState, type ReactNode } from 'react';
 import { cn } from '../lib/cn';
+
+/**
+ * Drop-down section: a header button with icon, title and a short summary (visible while closed),
+ * and its content below. The content stays mounted while closed so it keeps its data and state.
+ */
+export function Collapsible({
+  title,
+  icon: Icon,
+  summary,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  icon: LucideIcon;
+  summary?: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const id = useId();
+  return (
+    <section className="rounded-xl border border-border bg-surface">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-border/20"
+      >
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
+          <Icon className="size-4" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1 text-sm font-semibold">{title}</span>
+        {summary && <span className="shrink-0 text-xs text-ink/70">{summary}</span>}
+        <ChevronDown className={cn('size-4 shrink-0 text-ink/50 transition-transform', open && 'rotate-180')} aria-hidden />
+      </button>
+      <div id={id} hidden={!open} className="border-t border-border px-4 py-4">
+        {children}
+      </div>
+    </section>
+  );
+}
 
 export const inputClass =
   'w-full rounded-lg bg-bg border border-border px-3 py-2 text-sm [color-scheme:light] focus:outline-none focus:border-accent';

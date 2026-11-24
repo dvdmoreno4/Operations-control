@@ -93,7 +93,7 @@ export function IbReportSection({ memberId, onError, onScored }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-[11px] font-mono uppercase tracking-widest text-accent">Operativa Interactive Brokers</h4>
+        <span className="text-xs text-ink/60">Informes PortfolioAnalyst subidos</span>
         <button type="button" className={cn(secondaryButton, 'flex items-center gap-1.5')} disabled={Boolean(status)} onClick={() => input.current?.click()}>
           <Upload className="size-3.5" aria-hidden />
           {status || 'Subir informe PDF'}

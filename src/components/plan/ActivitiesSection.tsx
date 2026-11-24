@@ -62,7 +62,6 @@ export function ActivitiesSection({ memberId, period, admin, onScoreChanged, onE
 
   return (
     <div className="space-y-3">
-      <h4 className="text-[11px] font-mono uppercase tracking-widest text-accent">Actividades extraordinarias y colaboraciones</h4>
 
       <div className="rounded-lg border border-border px-3 py-2 text-xs">
         <div className="flex items-baseline justify-between">

@@ -68,7 +68,7 @@ export function ProjectsSection({ memberId, period, admin, members, onScoreChang
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-[11px] font-mono uppercase tracking-widest text-accent">Proyectos</h4>
+        <span className="text-xs text-ink/60">Proyectos propios y en los que colabora</span>
         {!creating && (
           <button type="button" className={secondaryButton} onClick={() => setCreating(true)}>
             Nuevo proyecto

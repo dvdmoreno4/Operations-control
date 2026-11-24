@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { useId, useState, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { DEPARTMENTS, DEPARTMENT_KEYS, type DepartmentKey } from '../../lib/floorplan';
 import { compliance, SCORE_SEGMENTS } from '../../lib/kpis';
@@ -40,14 +41,28 @@ export function StatsPanels(props: Props) {
   );
 }
 
-function Panel({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
+/** Collapsible panel; `aside` controls sit beside the toggle, outside it. Content stays mounted while closed. */
+function Panel({ title, aside, defaultOpen = true, children }: { title: string; aside?: ReactNode; defaultOpen?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const id = useId();
   return (
     <section className="glass rounded-xl p-4 sm:p-5 space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-[11px] font-mono uppercase tracking-widest text-accent">{title}</h3>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-accent hover:opacity-80"
+        >
+          <ChevronDown className={cn('size-3.5 transition-transform', !open && '-rotate-90')} aria-hidden />
+          {title}
+        </button>
         {aside}
       </header>
-      {children}
+      <div id={id} hidden={!open} className="space-y-4">
+        {children}
+      </div>
     </section>
   );
 }
@@ -365,7 +380,7 @@ function StationTable({ stats, department, selectedStationId, onSelectStation }:
   // Only active workstations (with a member) are listed.
   const rows = statsOfDepartment(stats, department).filter((s) => s.member);
   return (
-    <Panel title="Puestos de trabajo" aside={<span className="text-[11px] text-ink/60">{rows.length} activos</span>}>
+    <Panel title="Puestos de trabajo" defaultOpen={false} aside={<span className="text-[11px] text-ink/60">{rows.length} activos</span>}>
       {rows.length === 0 ? (
         <p className="text-sm text-ink/60">No hay puestos activos{department ? ' en este departamento' : ''}.</p>
       ) : (

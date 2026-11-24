@@ -63,14 +63,9 @@ export function RequestsSection({ memberId, admin, onChanged, onError }: Props) 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-accent">
-          Recomendaciones de mejora y solicitudes
-          {pendingRequests > 0 && (
-            <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white" aria-label={`${pendingRequests} solicitudes pendientes`}>
-              {pendingRequests}
-            </span>
-          )}
-        </h4>
+        <p className="text-xs text-ink/60">
+          {pendingRequests > 0 ? `${pendingRequests} solicitudes pendientes en el plano.` : 'Solicitudes del trabajador y recomendaciones de mejora.'}
+        </p>
         {!creating && (
           <button type="button" className={secondaryButton} onClick={() => setCreating(true)}>
             Nueva

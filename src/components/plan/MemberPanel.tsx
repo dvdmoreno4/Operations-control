@@ -1,8 +1,19 @@
+import { FolderKanban, Gauge, Inbox, Sparkles, TrendingUp } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api } from '../../lib/apiClient';
 import { DEPARTMENT_KEYS, DEPARTMENTS, STATIONS, findStation } from '../../lib/floorplan';
-import { compliance, EMPTY_KPIS, memberDepartment, SCORE_SEGMENTS, totalScore, type KpiRecord, type KpiValues, type Member } from '../../lib/kpis';
-import { Field, inputClass, money, primaryButton, secondaryButton, SignedMoney, SignedPercent, TableFrame, Td, Th } from '../ui';
+import {
+  centralScore,
+  compliance,
+  EMPTY_KPIS,
+  memberDepartment,
+  SCORE_SEGMENTS,
+  totalScore,
+  type KpiRecord,
+  type KpiValues,
+  type Member,
+} from '../../lib/kpis';
+import { Collapsible, Field, inputClass, money, primaryButton, secondaryButton, SignedMoney, SignedPercent, TableFrame, Td, Th } from '../ui';
 import { ActivitiesSection } from './ActivitiesSection';
 import { IbReportSection } from './ib/IbReportSection';
 import { ProjectsSection } from './ProjectsSection';
@@ -117,18 +128,35 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
   }
 
   const record = records?.find((r) => r.period === period);
+  const values = record ?? EMPTY_KPIS;
+  const refresh = async () => {
+    await loadRecords();
+    await onChanged();
+  };
+  const scoreChip = (score: number | null | undefined) => (
+    <span className="rounded-full bg-border/50 px-2 py-0.5 font-semibold tabular-nums text-ink">{record ? `${score ?? 0} / 100` : 'Sin datos'}</span>
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {editing ? (
         <EditMember member={member} members={members} onDone={() => setEditing(false)} onChanged={onChanged} onError={onError} />
       ) : (
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold tracking-tight">{member.name}</h2>
             {member.role && <p className="text-xs text-ink/60">{member.role}</p>}
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
+            <label className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-ink/60">
+              Mes
+              <input
+                className={cn(inputClass, 'w-auto py-1 text-xs')}
+                type="month"
+                value={period}
+                onChange={(e) => e.target.value && setPeriod(e.target.value)}
+              />
+            </label>
             <button type="button" className={secondaryButton} onClick={() => setEditing(true)}>
               Editar
             </button>
@@ -139,68 +167,121 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
         </div>
       )}
 
-      <Field label="Periodo">
-        <input className={inputClass} type="month" value={period} onChange={(e) => e.target.value && setPeriod(e.target.value)} />
-      </Field>
-
       {records === null ? (
         <p className="text-sm text-ink/60">Cargando expediente...</p>
       ) : (
-        <>
-          <SemesterKpi records={records} period={period} onSelect={setPeriod} />
-          <h4 className="text-[11px] font-mono uppercase tracking-widest text-accent">
-            KPI mensual · <span className="capitalize">{monthLabel(period)}</span>
-          </h4>
-          <ScoreBar values={record ?? EMPTY_KPIS} />
-          {record ? <KpiTiles record={record} /> : <p className="text-sm text-ink/60">Sin KPIs registrados para {monthLabel(period)}.</p>}
-          <KpiForm
-            key={`${member.id}-${period}-${records.length}`}
-            memberId={member.id}
-            period={period}
-            initial={record ?? EMPTY_KPIS}
-            onSaved={async () => {
-              await loadRecords();
-              await onChanged();
-            }}
-            onError={onError}
-          />
-          <History records={records} selected={period} onSelect={setPeriod} />
-        </>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border border-border p-4">
+            <SemesterKpi records={records} period={period} onSelect={setPeriod} />
+          </div>
+          <MonthSummary values={values} period={period} hasRecord={Boolean(record)} />
+        </div>
       )}
 
-      <RequestsSection memberId={member.id} admin={admin} onChanged={onChanged} onError={onError} />
+      <div className="space-y-2">
+        <Collapsible title="KPI del mes: detalle y registro" icon={Gauge} summary={scoreChip(totalScore(values))}>
+          {records === null ? (
+            <p className="text-sm text-ink/60">Cargando...</p>
+          ) : (
+            <div className="space-y-5">
+              <ScoreBar values={values} />
+              {record ? <KpiTiles record={record} /> : <p className="text-sm text-ink/60">Sin KPIs registrados para {monthLabel(period)}.</p>}
+              <KpiForm
+                key={`${member.id}-${period}-${records.length}`}
+                memberId={member.id}
+                period={period}
+                initial={values}
+                onSaved={refresh}
+                onError={onError}
+              />
+              <History records={records} selected={period} onSelect={setPeriod} />
+            </div>
+          )}
+        </Collapsible>
 
-      <ActivitiesSection
-        memberId={member.id}
-        period={period}
-        admin={admin}
-        onScoreChanged={async () => {
-          await loadRecords();
-          await onChanged();
-        }}
-        onError={onError}
-      />
+        <Collapsible title="Resultados operativos · Interactive Brokers" icon={TrendingUp} summary={scoreChip(record?.scoreOperational)}>
+          <IbReportSection memberId={member.id} onError={onError} onScored={refresh} />
+        </Collapsible>
 
-      <IbReportSection
-        memberId={member.id}
-        onError={onError}
-        onScored={async () => {
-          await loadRecords();
-          await onChanged();
-        }}
-      />
+        <Collapsible title="Proyectos" icon={FolderKanban} summary={scoreChip(record?.scoreProjects)}>
+          <ProjectsSection memberId={member.id} period={period} admin={admin} members={members} onScoreChanged={refresh} onError={onError} />
+        </Collapsible>
 
-      <ProjectsSection
-        memberId={member.id}
-        period={period}
-        admin={admin}
-        members={members}
-        onScoreChanged={async () => {
-          await loadRecords();
-          await onChanged();
-        }}
-        onError={onError}
-      />
+        <Collapsible
+          title="Actividades extraordinarias"
+          icon={Sparkles}
+          summary={
+            <span
+              className={cn(
+                'rounded-full px-2 py-0.5 font-semibold tabular-nums',
+                values.scoreExtra < 0 ? 'bg-red-50 text-danger' : values.scoreExtra > 0 ? 'bg-violet-50 text-violet-700' : 'bg-border/50 text-ink',
+              )}
+            >
+              {values.scoreExtra > 0 ? '+' : values.scoreExtra < 0 ? '−' : '±'}
+              {Math.abs(values.scoreExtra)} pts
+            </span>
+          }
+        >
+          <ActivitiesSection memberId={member.id} period={period} admin={admin} onScoreChanged={refresh} onError={onError} />
+        </Collapsible>
+
+        <Collapsible
+          title="Solicitudes y recomendaciones"
+          icon={Inbox}
+          summary={
+            member.pendingRequests > 0 ? (
+              <span className="rounded-full bg-red-600 px-2 py-0.5 font-semibold text-white">{member.pendingRequests} pendientes</span>
+            ) : (
+              <span className="text-ink/50">Sin pendientes</span>
+            )
+          }
+        >
+          <RequestsSection memberId={member.id} admin={admin} onChanged={onChanged} onError={onError} />
+        </Collapsible>
+      </div>
+    </div>
+  );
+}
+
+/** Monthly KPI at a glance: total, central KPI, each segment and the activities adjustment. */
+function MonthSummary({ values, period, hasRecord }: { values: KpiValues; period: string; hasRecord: boolean }) {
+  const total = totalScore(values);
+  const central = centralScore(values);
+  const extra = values.scoreExtra;
+  return (
+    <div className="space-y-3 rounded-xl border border-border p-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <h4 className="text-[11px] font-mono uppercase tracking-widest text-accent">
+          KPI mensual · <span className="capitalize">{monthLabel(period)}</span>
+        </h4>
+        <span className="text-2xl font-semibold tabular-nums">
+          {hasRecord ? total : '-'}
+          <span className="text-sm text-ink/50"> / 100</span>
+        </span>
+      </div>
+      <ul className="space-y-1.5 text-xs">
+        {SCORE_SEGMENTS.map((segment) => (
+          <li key={segment.key} className="grid grid-cols-[9rem_1fr_2.5rem] items-center gap-2">
+            <span className="flex items-center gap-1.5 truncate text-ink/70">
+              <span className="size-2 shrink-0 rounded-sm" style={{ backgroundColor: segment.color }} />
+              {segment.label}
+            </span>
+            <div className="h-1.5 overflow-hidden rounded-full bg-border/60" aria-hidden>
+              <div className="h-full rounded-full" style={{ width: `${values[segment.key]}%`, backgroundColor: segment.color }} />
+            </div>
+            <span className="text-right font-semibold tabular-nums">{values[segment.key]}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="border-t border-border pt-2 text-[11px] text-ink/60">
+        KPI central {central}
+        {extra !== 0 && (
+          <span className={cn('font-semibold', extra < 0 ? 'text-danger' : 'text-violet-700')}>
+            {' '}
+            {extra > 0 ? '+' : '−'} {Math.abs(extra)} actividades extraordinarias
+          </span>
+        )}
+      </p>
     </div>
   );
 }
@@ -215,6 +296,7 @@ function SemesterKpi({ records, period, onSelect }: { records: KpiRecord[]; peri
   return (
     <div className="space-y-2">
       <h4 className="text-[11px] font-mono uppercase tracking-widest text-accent">KPI semestral · {semesterLabel(semester)}</h4>
+      <p className="text-[11px] text-ink/50">Pulsa un mes para ver su KPI mensual.</p>
       <SemesterProgress semester={semester} avgScore={avgScore} />
       <div className="grid grid-cols-6 gap-1" role="group" aria-label="Meses del semestre">
         {months.map((m) => {
