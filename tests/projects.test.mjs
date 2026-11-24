@@ -5,60 +5,52 @@ import { COLLABORATOR_SHARE, projectScore, shareOf } from '../src/lib/projects.t
 
 const ev = (status, progress, at) => ({ status, progress, at });
 
-test('milestones reached in the month add their points', () => {
-  const project = {
-    name: 'A',
-    events: [ev('propuesta', 0, '2026-10-02T10:00:00Z'), ev('aceptado', 50, '2026-11-05T10:00:00Z'), ev('produccion', 75, '2026-11-20T10:00:00Z')],
-  };
+test('one completed project in the semester reaches the goal (100)', () => {
+  const project = { name: 'A', events: [ev('propuesta', 0, '2026-07-10T10:00:00Z'), ev('aceptado', 50, '2026-08-01T10:00:00Z'), ev('culminado', 100, '2026-10-05T10:00:00Z')] };
   const result = projectScore([project], '2026-11');
-  assert.equal(result.milestonePoints, 60);
   assert.equal(result.score, 100);
-  assert.equal(result.milestones.length, 2);
+  assert.equal(result.semester, '2026-H2');
+  assert.equal(result.completedInSemester, 1);
 });
 
-test('milestones from earlier months do not count again', () => {
-  const project = {
-    name: 'A',
-    events: [
-      ev('propuesta', 0, '2026-09-01T10:00:00Z'),
-      ev('aceptado', 50, '2026-10-05T10:00:00Z'),
-      ev('propuesta', 40, '2026-11-01T10:00:00Z'),
-      ev('aceptado', 50, '2026-11-02T10:00:00Z'),
-    ],
-  };
-  assert.equal(projectScore([project], '2026-11').milestonePoints, 0);
+test('progress counts toward the goal as of the end of the month', () => {
+  const project = { name: 'A', events: [ev('propuesta', 20, '2026-07-10T10:00:00Z'), ev('produccion', 75, '2026-10-05T10:00:00Z')] };
+  assert.equal(projectScore([project], '2026-09').score, 20);
+  assert.equal(projectScore([project], '2026-10').score, 75);
 });
 
-test('manual progress gained in the month counts at 0.3 points per percent, capped at 15', () => {
-  const small = { name: 'A', events: [ev('propuesta', 10, '2026-10-30T10:00:00Z'), ev('propuesta', 30, '2026-11-10T10:00:00Z')] };
-  assert.equal(projectScore([small], '2026-11').manualPoints, 6);
-
-  const big = { name: 'B', events: [ev('propuesta', 0, '2026-11-01T10:00:00Z'), ev('propuesta', 49, '2026-11-10T10:00:00Z')] };
-  const other = { name: 'C', events: [ev('propuesta', 0, '2026-11-01T10:00:00Z'), ev('propuesta', 49, '2026-11-11T10:00:00Z')] };
-  assert.equal(projectScore([big, other], '2026-11').manualPoints, 15);
+test('several projects add up, capped at 100', () => {
+  const a = { name: 'A', events: [ev('aceptado', 50, '2026-08-01T10:00:00Z')] };
+  const b = { name: 'B', events: [ev('produccion', 75, '2026-09-01T10:00:00Z')] };
+  assert.equal(projectScore([a, b], '2026-11').score, 100);
+  assert.equal(projectScore([a], '2026-11').score, 50);
 });
 
-test('no activity gives 0', () => {
-  assert.equal(projectScore([], '2026-11').score, 0);
-  const idle = { name: 'A', events: [ev('propuesta', 20, '2026-10-01T10:00:00Z')] };
-  assert.equal(projectScore([idle], '2026-11').score, 0);
+test('projects completed in an earlier semester count for the year, not again for the semester', () => {
+  const old = { name: 'A', events: [ev('culminado', 100, '2026-03-01T10:00:00Z')] };
+  const result = projectScore([old], '2026-11');
+  assert.equal(result.score, 0);
+  assert.equal(result.completedInSemester, 0);
+  assert.equal(result.completedInYear, 1);
 });
 
-test('collaborators earn a share of the project points, others nothing', () => {
+test('projects created after the month do not count', () => {
+  const later = { name: 'A', events: [ev('aceptado', 50, '2026-12-02T10:00:00Z')] };
+  assert.equal(projectScore([later], '2026-11').score, 0);
+});
+
+test('collaborators earn a share of the project progress, others nothing', () => {
   const project = {
     name: 'A',
     memberId: 'owner',
     collaborators: [{ memberId: 'helper', name: 'Ayudante' }],
-    events: [ev('propuesta', 0, '2026-10-02T10:00:00Z'), ev('aceptado', 50, '2026-11-05T10:00:00Z')],
+    events: [ev('propuesta', 0, '2026-08-02T10:00:00Z'), ev('aceptado', 50, '2026-11-05T10:00:00Z')],
   };
   assert.equal(shareOf(project, 'owner'), 1);
   assert.equal(shareOf(project, 'helper'), COLLABORATOR_SHARE);
   assert.equal(shareOf(project, 'stranger'), 0);
 
-  const owner = projectScore([{ ...project, share: shareOf(project, 'owner') }], '2026-11');
-  const helper = projectScore([{ ...project, share: shareOf(project, 'helper') }], '2026-11');
-  const stranger = projectScore([{ ...project, share: shareOf(project, 'stranger') }], '2026-11');
-  assert.equal(owner.milestonePoints, 30);
-  assert.equal(helper.milestonePoints, 30 * COLLABORATOR_SHARE);
-  assert.equal(stranger.points, 0);
+  assert.equal(projectScore([{ ...project, share: 1 }], '2026-11').score, 50);
+  assert.equal(projectScore([{ ...project, share: COLLABORATOR_SHARE }], '2026-11').score, 50 * COLLABORATOR_SHARE);
+  assert.equal(projectScore([{ ...project, share: 0 }], '2026-11').score, 0);
 });

@@ -418,3 +418,14 @@ alter table kpi_records add constraint kpi_records_score_extra_check check (scor
 -- null = pendiente, true = realizada, false = no realizada.
 alter table member_activities alter column done drop not null;
 alter table member_activities alter column done set default null;
+
+------------------------------------------------------------------------------------------------
+-- Migration 008 (also in supabase/migrations/008_metas_pantalla_ib.sql)
+------------------------------------------------------------------------------------------------
+
+-- Screen hours registered for the month; score_screen_time is computed from them against the goal.
+alter table kpi_records add column if not exists screen_hours numeric(7, 2) check (screen_hours >= 0);
+
+alter table kpi_settings add column if not exists annual_return_goal_pct numeric(6, 2) not null default 25;
+alter table kpi_settings alter column monthly_screen_hours_goal set default 140;
+update kpi_settings set monthly_screen_hours_goal = 140, annual_return_goal_pct = 25;

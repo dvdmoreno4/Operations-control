@@ -2,11 +2,12 @@ import { Download, FileText, Trash2, Upload, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../lib/apiClient';
 import { cn } from '../../lib/cn';
+import { PROJECTS_PER_SEMESTER_GOAL, PROJECTS_PER_YEAR_GOAL } from '../../lib/goals';
 import type { Member } from '../../lib/kpis';
+import { semesterLabel } from '../../lib/semester';
 import {
   COLLABORATOR_SHARE,
   MAX_MANUAL_PROGRESS,
-  PROJECT_POINTS_GOAL,
   PROJECT_STATUSES,
   progressOf,
   projectScore,
@@ -79,15 +80,24 @@ export function ProjectsSection({ memberId, period, admin, members, onScoreChang
       {score && (
         <div className="rounded-lg border border-border px-3 py-2 text-xs">
           <div className="flex items-baseline justify-between">
-            <span className="font-mono uppercase tracking-wider text-ink/60 text-[10px]">Puntuación del mes</span>
+            <span className="font-mono uppercase tracking-wider text-ink/60 text-[10px]">
+              Avance meta semestral · {semesterLabel(score.semester)}
+            </span>
             <span className="text-sm font-semibold tabular-nums">
               {score.score}
               <span className="text-xs font-normal text-ink/50"> / 100</span>
             </span>
           </div>
-          <p className="mt-1 text-ink/60">
-            {score.points} de {PROJECT_POINTS_GOAL} puntos: {score.milestonePoints} por hitos y {score.manualPoints} por avance de propuestas. En los
-            proyectos donde colabora suma el {Math.round(COLLABORATOR_SHARE * 100)}% de los puntos.
+          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-border/60" aria-hidden>
+            <div className="h-full rounded-full bg-[#14b8a6]" style={{ width: `${score.score}%` }} />
+          </div>
+          <p className="mt-1.5 text-ink/60">
+            Meta: mínimo {PROJECTS_PER_SEMESTER_GOAL} proyecto culminado por semestre y {PROJECTS_PER_YEAR_GOAL} al año. Cada proyecto activo suma su
+            avance (50% aceptado, 75% producción, 100% culminado); como colaborador suma el {Math.round(COLLABORATOR_SHARE * 100)}%.
+          </p>
+          <p className="mt-1 font-semibold">
+            Culminados: {score.completedInSemester} de {PROJECTS_PER_SEMESTER_GOAL} en el semestre · {score.completedInYear} de {PROJECTS_PER_YEAR_GOAL} en{' '}
+            {period.slice(0, 4)}
           </p>
         </div>
       )}

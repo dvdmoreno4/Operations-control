@@ -1,4 +1,7 @@
-// Project types, progress rules and the monthly project score. Shared by API routes and the UI.
+// Project types, progress rules and the project score. Shared by API routes and the UI.
+
+import { PROJECTS_PER_SEMESTER_GOAL } from './goals';
+import { monthsOf, semesterOf } from './semester';
 
 export const PROJECT_STATUSES = ['propuesta', 'aceptado', 'produccion', 'culminado'] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
@@ -13,21 +16,7 @@ export const STATUS_INFO: Record<ProjectStatus, { label: string; progress: numbe
 /** Highest progress a member can set by hand; 50 is reserved for the "aceptado" milestone. */
 export const MAX_MANUAL_PROGRESS = 49;
 
-/** Points earned the month a project first reaches each milestone. */
-export const MILESTONE_POINTS: Record<Exclude<ProjectStatus, 'propuesta'>, number> = {
-  aceptado: 30,
-  produccion: 30,
-  culminado: 40,
-};
-
-/** Points per percentage point of manual progress gained in a month, and the monthly cap of those points. */
-export const MANUAL_POINTS_PER_PCT = 0.3;
-export const MANUAL_POINTS_CAP = 15;
-
-/** Monthly points that give a project score of 100. Will move to the KPI settings. */
-export const PROJECT_POINTS_GOAL = 60;
-
-/** Share of a project's monthly points a collaborator earns (the owner earns all of them). */
+/** Share of a project's progress a collaborator earns (the owner earns all of it). */
 export const COLLABORATOR_SHARE = 0.5;
 
 export type ProjectEvent = { status: ProjectStatus; progress: number; at: string };
@@ -58,11 +47,17 @@ export const isProjectStatus = (value: unknown): value is ProjectStatus =>
 export const progressOf = (status: ProjectStatus, manualProgress: number) => STATUS_INFO[status].progress ?? manualProgress;
 
 export type ProjectScore = {
+  /** 0-100: progress toward the semester goal (PROJECTS_PER_SEMESTER_GOAL completed projects). */
   score: number;
+  /** Semester of the score, e.g. "2026-H2". */
+  semester: string;
+  /** Sum of share x progress of the projects counted, in "project %" (100 = one full project). */
   points: number;
-  milestonePoints: number;
-  manualPoints: number;
-  milestones: { project: string; status: ProjectStatus; at: string; share: number }[];
+  /** Projects completed in the semester, weighted by share. */
+  completedInSemester: number;
+  /** Projects completed in the calendar year, weighted by share. */
+  completedInYear: number;
+  counted: { project: string; progress: number; share: number }[];
 };
 
 /** Share of a project's points that `memberId` earns: 1 as owner, COLLABORATOR_SHARE as collaborator, else 0. */
@@ -71,54 +66,67 @@ export function shareOf(project: Pick<Project, 'memberId' | 'collaborators'>, me
   return project.collaborators.some((c) => c.memberId === memberId) ? COLLABORATOR_SHARE : 0;
 }
 
-/** Month bounds in UTC for a YYYY-MM period. */
-function monthBounds(period: string): [number, number] {
+const monthStart = (period: string) => {
   const [year, month] = period.split('-').map(Number);
-  return [Date.UTC(year, month - 1, 1), Date.UTC(year, month, 1)];
-}
+  return Date.UTC(year, month - 1, 1);
+};
+const monthEnd = (period: string) => {
+  const [year, month] = period.split('-').map(Number);
+  return Date.UTC(year, month, 1);
+};
+
+/** When the project first reached "culminado", or null. */
+const completedAt = (events: ProjectEvent[]) => {
+  const event = events.find((e) => e.status === 'culminado');
+  return event ? Date.parse(event.at) : null;
+};
 
 /**
- * Score from 0 to 100 for the projects of one member in a month:
- * milestone points the first time a project reaches each milestone in that month, plus points
- * for manual progress gained in the proposal stage (capped), over PROJECT_POINTS_GOAL.
- * `share` scales a project's points (1 for its owner, COLLABORATOR_SHARE for a collaborator).
+ * Project score (0-100) as of the end of a month, against the goal of PROJECTS_PER_SEMESTER_GOAL
+ * completed projects a semester (2 a year): every project active in that semester counts its
+ * progress at the end of the month (50 aceptado, 75 produccion, 100 culminado), times its share
+ * (1 owner, COLLABORATOR_SHARE collaborator). Projects completed before the semester began do not
+ * count again. 100 = the semester goal reached.
  */
 export function projectScore(projects: (Pick<Project, 'name' | 'events'> & { share?: number })[], period: string): ProjectScore {
-  const [start, end] = monthBounds(period);
-  let milestonePoints = 0;
-  let manualGain = 0;
-  const milestones: ProjectScore['milestones'] = [];
+  const semester = semesterOf(period);
+  const semesterStart = monthStart(monthsOf(semester)[0]);
+  const end = monthEnd(period);
+  const year = period.slice(0, 4);
+  const yearStart = Date.UTC(Number(year), 0, 1);
+
+  let points = 0;
+  let completedInSemester = 0;
+  let completedInYear = 0;
+  const counted: ProjectScore['counted'] = [];
 
   for (const project of projects) {
     const share = project.share ?? 1;
     if (share <= 0) continue;
-    const time = (e: ProjectEvent) => Date.parse(e.at);
-    const before = project.events.filter((e) => time(e) < start);
-    const during = project.events.filter((e) => time(e) >= start && time(e) < end);
-    const reached = new Set(before.map((e) => e.status));
+    const history = project.events.filter((e) => Date.parse(e.at) < end);
+    const last = history.at(-1);
+    if (!last) continue;
 
-    for (const event of during) {
-      if (event.status === 'propuesta' || reached.has(event.status)) continue;
-      reached.add(event.status);
-      milestonePoints += MILESTONE_POINTS[event.status] * share;
-      milestones.push({ project: project.name, status: event.status, at: event.at, share });
+    const done = completedAt(history);
+    if (done !== null && done < semesterStart) {
+      if (done >= yearStart) completedInYear += share;
+      continue;
     }
-
-    const proposalDuring = during.filter((e) => e.status === 'propuesta').map((e) => e.progress);
-    if (proposalDuring.length > 0) {
-      const last = before.at(-1);
-      const startProgress = last && last.status === 'propuesta' ? last.progress : 0;
-      manualGain += Math.max(0, Math.max(...proposalDuring) - startProgress) * share;
+    if (done !== null) {
+      completedInSemester += share;
+      if (done >= yearStart) completedInYear += share;
     }
+    points += last.progress * share;
+    counted.push({ project: project.name, progress: last.progress, share });
   }
 
-  const manualPoints = Math.min(MANUAL_POINTS_CAP, Math.round(manualGain * MANUAL_POINTS_PER_PCT * 10) / 10);
-  const points = milestonePoints + manualPoints;
+  const round1 = (v: number) => Math.round(v * 10) / 10;
   return {
-    score: Math.min(100, Math.round((points / PROJECT_POINTS_GOAL) * 1000) / 10),
-    points,
-    milestonePoints,
-    manualPoints,
-    milestones,
+    score: Math.min(100, round1(points / PROJECTS_PER_SEMESTER_GOAL)),
+    semester,
+    points: round1(points),
+    completedInSemester: round1(completedInSemester),
+    completedInYear: round1(completedInYear),
+    counted,
   };
 }

@@ -1,4 +1,6 @@
-import { FolderKanban, Gauge, Inbox, Sparkles, TrendingUp } from 'lucide-react';
+import { FolderKanban, Gauge, Inbox, Monitor, Sparkles, TrendingUp } from 'lucide-react';
+import { SCREEN_HOURS_GOAL } from '../../lib/goals';
+import { ScreenTimeSection } from './ScreenTimeSection';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api } from '../../lib/apiClient';
 import { DEPARTMENT_KEYS, DEPARTMENTS, STATIONS, findStation } from '../../lib/floorplan';
@@ -201,6 +203,22 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
 
         <Collapsible title="Resultados operativos · Interactive Brokers" icon={TrendingUp} summary={scoreChip(record?.scoreOperational)}>
           <IbReportSection memberId={member.id} onError={onError} onScored={refresh} />
+        </Collapsible>
+
+        <Collapsible
+          title="Tiempo en pantalla"
+          icon={Monitor}
+          summary={
+            <span className="rounded-full bg-border/50 px-2 py-0.5 font-semibold tabular-nums text-ink">
+              {record?.screenHours ?? 0} / {SCREEN_HOURS_GOAL} h
+            </span>
+          }
+        >
+          {records === null ? (
+            <p className="text-sm text-ink/60">Cargando...</p>
+          ) : (
+            <ScreenTimeSection key={period} memberId={member.id} period={period} records={records} onSaved={refresh} onError={onError} />
+          )}
         </Collapsible>
 
         <Collapsible title="Proyectos" icon={FolderKanban} summary={scoreChip(record?.scoreProjects)}>

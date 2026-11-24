@@ -1,6 +1,7 @@
 // Server-only: stores a parsed IB report and reads it back for the API.
 
 import { ApiError, db, unwrap } from '../api';
+import { ANNUAL_RETURN_GOAL_PCT } from '../goals';
 import { DOCUMENTS_BUCKET } from '../storage';
 import type { IbReportData } from './portfolioAnalyst';
 import { computeMetrics, operationalScore, recommendations, type ScoreSettings } from './score';
@@ -12,9 +13,9 @@ const n = (value: unknown) => (value === null || value === undefined ? null : Nu
 const s = (value: unknown) => (value === null || value === undefined ? '' : String(value));
 
 export async function loadScoreSettings(): Promise<ScoreSettings> {
-  const rows = unwrap(await db().from('kpi_settings').select('monthly_return_goal_pct, max_position_pct').limit(1)) as Row[];
+  const rows = unwrap(await db().from('kpi_settings').select('*').limit(1)) as Row[];
   return {
-    monthlyReturnGoalPct: Number(rows[0]?.monthly_return_goal_pct ?? 1),
+    annualReturnGoalPct: Number(rows[0]?.annual_return_goal_pct ?? ANNUAL_RETURN_GOAL_PCT),
     maxPositionPct: Number(rows[0]?.max_position_pct ?? 25),
   };
 }

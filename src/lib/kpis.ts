@@ -40,8 +40,8 @@ export type KpiValues = {
   notes: string;
 };
 
-/** period is the month as YYYY-MM. */
-export type KpiRecord = KpiValues & { period: string };
+/** period is the month as YYYY-MM. screenHours: hours registered for the month, when any. */
+export type KpiRecord = KpiValues & { period: string; screenHours?: number | null };
 
 /** Segments of the central KPI. Weights must add up to 1. */
 export const SCORE_SEGMENTS = [
@@ -102,6 +102,7 @@ export function recordFromRow(row: Row): KpiRecord {
     scoreProjects: n('score_projects'),
     scoreScreenTime: n('score_screen_time'),
     scoreExtra: n('score_extra'),
+    screenHours: row.screen_hours === null || row.screen_hours === undefined ? null : Number(row.screen_hours),
     notes: String(row.notes ?? ''),
   };
 }

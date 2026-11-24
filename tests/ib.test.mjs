@@ -56,6 +56,16 @@ test('readTable maps right-aligned numbers to left-aligned headers, groups and c
   assert.equal(rows[1].values[3], '4,146.20');
 });
 
+test('screen time and return goals', async () => {
+  const { screenScore, proRataReturnGoal } = await import('../src/lib/goals.ts');
+  assert.equal(screenScore(140), 100);
+  assert.equal(screenScore(70), 50);
+  assert.equal(screenScore(200), 100);
+  // 25% a year: 10.4% due by May.
+  assert.equal(proRataReturnGoal(5), 10.4);
+  assert.equal(proRataReturnGoal(12), 25);
+});
+
 test('a PDF without Account Overview is rejected with a clear error', () => {
   assert.throws(() => parsePortfolioAnalyst([{ number: 1, rows: [row(34, ['Activity Statement', 24])] }]), IbParseError);
 });

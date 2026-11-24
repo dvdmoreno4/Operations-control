@@ -1,15 +1,19 @@
 // Operational score (0-100) and rule-based recommendations for a parsed IB report. Pure functions.
 
+import { ANNUAL_RETURN_GOAL_PCT, proRataReturnGoal } from '../goals';
 import type { IbReportData } from './portfolioAnalyst';
 
-export type ScoreSettings = { monthlyReturnGoalPct: number; maxPositionPct: number };
-export const DEFAULT_SCORE_SETTINGS: ScoreSettings = { monthlyReturnGoalPct: 1, maxPositionPct: 25 };
+/** annualReturnGoalPct: minimum return a year (25%). */
+export type ScoreSettings = { annualReturnGoalPct: number; maxPositionPct: number };
+export const DEFAULT_SCORE_SETTINGS: ScoreSettings = { annualReturnGoalPct: ANNUAL_RETURN_GOAL_PCT, maxPositionPct: 25 };
 
 export type Metrics = {
   /** Month the score is for (YYYY-MM): the last month of the report. */
   month: string;
   monthReturnPct: number | null;
   benchmarkMonthReturnPct: number | null;
+  /** Return of the year to date, in %. */
+  ytdPct: number | null;
   realizedPnl: number;
   unrealizedPnl: number;
   closedPositions: number;
@@ -70,6 +74,7 @@ export function computeMetrics(report: IbReportData): Metrics {
     month,
     monthReturnPct,
     benchmarkMonthReturnPct,
+    ytdPct: report.returns.account?.ytd ?? null,
     realizedPnl: report.symbols.reduce((sum, s) => sum + (s.realizedPnl ?? 0), 0),
     unrealizedPnl: report.positions.reduce((sum, p) => sum + (p.unrealizedPnl ?? 0), 0),
     closedPositions: report.symbols.filter((s) => !s.open).length,
@@ -89,9 +94,11 @@ export function computeMetrics(report: IbReportData): Metrics {
 export function operationalScore(report: IbReportData, metrics: Metrics, settings: ScoreSettings = DEFAULT_SCORE_SETTINGS): OperationalScore {
   const risk = report.risk.account;
 
-  // Rentabilidad: 50 points at the monthly goal, +/-10 points per percentage point above/below it.
-  const rentabilidad =
-    metrics.monthReturnPct === null ? null : clamp(50 + (metrics.monthReturnPct - settings.monthlyReturnGoalPct) * 10);
+  // Rentabilidad: year-to-date return over the share of the annual goal due by this month
+  // (25% x months / 12). On or above pace gives 100; a negative year gives 0.
+  const monthNumber = Number(metrics.month.slice(5, 7));
+  const dueGoal = proRataReturnGoal(monthNumber, settings.annualReturnGoalPct);
+  const rentabilidad = metrics.ytdPct === null ? null : clamp((metrics.ytdPct / dueGoal) * 100);
 
   // Riesgo: 100 minus penalties for drawdown over 10%, concentration over the limit, margin use and short options.
   let riesgo = 100;
@@ -130,9 +137,9 @@ export function operationalScore(report: IbReportData, metrics: Metrics, setting
       weight: 0.35,
       score: rentabilidad,
       detail:
-        metrics.monthReturnPct === null
-          ? 'Sin retorno del mes en el informe'
-          : `Retorno ${metrics.month}: ${pct(metrics.monthReturnPct)} (meta ${pct(settings.monthlyReturnGoalPct)})`,
+        metrics.ytdPct === null
+          ? 'Sin retorno del año en el informe'
+          : `Año a la fecha ${pct(metrics.ytdPct)} frente a ${pct(dueGoal)} esperado a ${metrics.month} (meta anual mínima ${pct(settings.annualReturnGoalPct)})`,
     },
     { key: 'riesgo', label: 'Riesgo', weight: 0.25, score: clamp(riesgo), detail: penalties.length ? `Penaliza: ${penalties.join(', ')}` : 'Sin penalizaciones' },
     {
@@ -214,6 +221,24 @@ export function recommendations(report: IbReportData, metrics: Metrics, settings
 
   const ytd = report.returns.account?.ytd;
   const spxYtd = report.returns.benchmarks.SPXTR?.ytd;
+  if (ytd != null) {
+    const due = proRataReturnGoal(Number(metrics.month.slice(5, 7)), settings.annualReturnGoalPct);
+    list.push(
+      ytd >= due
+        ? {
+            code: 'RETURN_GOAL_ON_TRACK',
+            severity: 'info',
+            message: `Va en camino a la meta anual del ${pct(settings.annualReturnGoalPct)}: lleva ${pct(ytd)} en el año (esperado ${pct(due)} a ${metrics.month}).`,
+            data: { ytdPct: ytd, duePct: due, annualGoalPct: settings.annualReturnGoalPct },
+          }
+        : {
+            code: 'RETURN_GOAL_BEHIND',
+            severity: 'aviso',
+            message: `Rendimiento del año ${pct(ytd)} por debajo de lo esperado (${pct(due)} a ${metrics.month}) para la meta mínima anual del ${pct(settings.annualReturnGoalPct)}.`,
+            data: { ytdPct: ytd, duePct: due, annualGoalPct: settings.annualReturnGoalPct },
+          },
+    );
+  }
   if (ytd != null && spxYtd != null) {
     const diff = round1(ytd - spxYtd);
     list.push({
