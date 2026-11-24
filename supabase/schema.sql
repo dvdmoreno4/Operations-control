@@ -407,3 +407,14 @@ alter table member_activities enable row level security;
 update departments
 set label = 'Departamento de Acciones y Portafolios', short = 'Acciones y Portafolios'
 where key = 'nuevo_acciones';
+
+------------------------------------------------------------------------------------------------
+-- Migration 007 (also in supabase/migrations/007_conversatorio_penalizacion.sql)
+------------------------------------------------------------------------------------------------
+
+alter table kpi_records drop constraint if exists kpi_records_score_extra_check;
+alter table kpi_records add constraint kpi_records_score_extra_check check (score_extra between -100 and 100);
+
+-- null = pendiente, true = realizada, false = no realizada.
+alter table member_activities alter column done drop not null;
+alter table member_activities alter column done set default null;

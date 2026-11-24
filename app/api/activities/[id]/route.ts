@@ -14,7 +14,7 @@ async function findActivity(rawId: string) {
   return { id, memberId: String(row.member_id), period: String(row.period).slice(0, 7) };
 }
 
-/** Anyone can edit the description; only an admin marks an activity as done or not done. */
+/** Anyone can edit the description; only an admin sets it as done, not done or back to pending (null). */
 export const PATCH = route<Context>(async (req, { params }) => {
   const activity = await findActivity((await params).id);
   const body = await jsonBody(req);
@@ -22,9 +22,9 @@ export const PATCH = route<Context>(async (req, { params }) => {
   if (body.description !== undefined) changes.description = parseText(body.description, 'La descripción', { required: true, max: 2000 });
   if (body.done !== undefined) {
     requireAdmin(req);
-    if (typeof body.done !== 'boolean') throw new ApiError(400, 'El estado debe ser realizada o no realizada');
+    if (body.done !== null && typeof body.done !== 'boolean') throw new ApiError(400, 'El estado debe ser pendiente, realizada o no realizada');
     changes.done = body.done;
-    changes.done_at = body.done ? new Date().toISOString() : null;
+    changes.done_at = body.done === null ? null : new Date().toISOString();
   }
   if (Object.keys(changes).length === 0) throw new ApiError(400, 'No hay cambios');
   unwrap(await db().from('member_activities').update(changes).eq('id', activity.id).select('id'));

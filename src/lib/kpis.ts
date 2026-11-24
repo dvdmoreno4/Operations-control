@@ -32,7 +32,10 @@ export type KpiValues = {
   scoreOperational: number;
   scoreProjects: number;
   scoreScreenTime: number;
-  /** Bonus points of extraordinary activities in the month, added on top of the central KPI (0-10). */
+  /**
+   * Extraordinary activities adjustment of the month, added to the central KPI: + bonus for done
+   * activities, - penalty for conversatorios not done (-10 to +10).
+   */
   scoreExtra: number;
   notes: string;
 };
@@ -55,9 +58,9 @@ export function centralScore(values: ScoreInput): number {
   return Math.round(total * 10) / 10;
 }
 
-/** Total score: central KPI plus the extraordinary activities bonus, capped at 100. */
+/** Total score: central KPI plus the extraordinary activities adjustment, kept within 0-100. */
 export function totalScore(values: ScoreInput): number {
-  return Math.min(100, Math.round((centralScore(values) + (values.scoreExtra ?? 0)) * 10) / 10);
+  return Math.max(0, Math.min(100, Math.round((centralScore(values) + (values.scoreExtra ?? 0)) * 10) / 10));
 }
 
 /** Achieved over goal, in percent. Null when there is no goal. */

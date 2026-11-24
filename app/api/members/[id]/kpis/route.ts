@@ -32,7 +32,7 @@ export const PUT = route<Context>(async (req, { params }) => {
     scoreProjects: parseNumber(body.scoreProjects, 'Proyectos', score),
     scoreScreenTime: parseNumber(body.scoreScreenTime, 'Tiempo en pantalla', score),
     // Older clients do not send it; keep 0 rather than rejecting the form.
-    scoreExtra: body.scoreExtra === undefined ? 0 : parseNumber(body.scoreExtra, 'Actividades extraordinarias', score),
+    scoreExtra: body.scoreExtra === undefined ? 0 : parseNumber(body.scoreExtra, 'Actividades extraordinarias', { min: -100, max: 100 }),
     notes: parseText(body.notes, 'Las notas', { max: 1000 }),
   };
 

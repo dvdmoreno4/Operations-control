@@ -1,6 +1,14 @@
 import { Check, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { ACTIVITY_INFO, ACTIVITY_KINDS, activityBonus, MAX_ACTIVITY_BONUS, type ActivityKind, type MemberActivity } from '../../lib/activities';
+import {
+  ACTIVITY_INFO,
+  ACTIVITY_KINDS,
+  activityBonus,
+  MAX_ACTIVITY_BONUS,
+  MAX_ACTIVITY_PENALTY,
+  type ActivityKind,
+  type MemberActivity,
+} from '../../lib/activities';
 import { api } from '../../lib/apiClient';
 import { cn } from '../../lib/cn';
 import { inputClass, primaryButton, rowAction, secondaryButton } from '../ui';
@@ -16,7 +24,13 @@ type Props = {
   onError: (error: unknown) => void;
 };
 
-const points = (n: number) => `+${String(n).replace('.', ',')}`;
+const points = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${String(Math.abs(n)).replace('.', ',')}`;
+
+const STATES: { done: boolean | null; label: string; on: string }[] = [
+  { done: null, label: 'Pendiente', on: 'bg-border text-ink' },
+  { done: true, label: 'Realizada', on: 'bg-emerald-600 text-white' },
+  { done: false, label: 'No realizada', on: 'bg-red-600 text-white' },
+];
 
 export function ActivitiesSection({ memberId, period, admin, onScoreChanged, onError }: Props) {
   const [items, setItems] = useState<MemberActivity[] | null>(null);
@@ -53,16 +67,18 @@ export function ActivitiesSection({ memberId, period, admin, onScoreChanged, onE
       <div className="rounded-lg border border-border px-3 py-2 text-xs">
         <div className="flex items-baseline justify-between">
           <span className="text-[10px] font-mono uppercase tracking-wider text-ink/60">
-            Plus de <span className="capitalize">{monthLabel(period)}</span>
+            Ajuste de <span className="capitalize">{monthLabel(period)}</span>
           </span>
-          <span className="text-sm font-semibold tabular-nums text-accent">
-            {points(score.bonus)}
-            <span className="text-xs font-normal text-ink/50"> pts (máx. {MAX_ACTIVITY_BONUS})</span>
+          <span className={cn('text-sm font-semibold tabular-nums', score.net < 0 ? 'text-danger' : 'text-accent')}>
+            {points(score.net)}
+            <span className="text-xs font-normal text-ink/50"> pts al KPI central</span>
           </span>
         </div>
         <p className="mt-1 text-ink/60">
-          Es un adicional que se suma encima del KPI central (operativa, proyectos y pantalla); quien no hace estas actividades no pierde
-          puntos. Cada actividad realizada suma sus puntos ({score.doneCount} realizadas este mes).
+          Plus {points(score.bonus)} por {score.doneCount} actividades realizadas (máx. +{MAX_ACTIVITY_BONUS}). Las actividades son un adicional:
+          no hacerlas no resta, salvo el conversatorio, que es obligatorio y resta{' '}
+          {ACTIVITY_INFO.conversatorio.penalty} pts cada vez que se marca como no realizado (máx. −{MAX_ACTIVITY_PENALTY}).
+          {score.penalty > 0 && <span className="font-semibold text-danger"> Este mes resta −{String(score.penalty).replace('.', ',')}.</span>}
         </p>
       </div>
 
@@ -72,14 +88,15 @@ export function ActivitiesSection({ memberId, period, admin, onScoreChanged, onE
         <ul className="space-y-2">
           {ACTIVITY_KINDS.map((kind) => {
             const list = month.filter((a) => a.kind === kind);
-            const done = list.filter((x) => x.done).length;
+            const done = list.filter((x) => x.done === true).length;
+            const { bonus, penalty } = ACTIVITY_INFO[kind];
             return (
               <li key={kind} className="space-y-2 rounded-lg border border-border p-3 text-xs">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold">
                     {ACTIVITY_INFO[kind].label}{' '}
                     <span className="text-xs font-normal text-ink/50">
-                      · {points(ACTIVITY_INFO[kind].bonus)} por actividad · {done} de {list.length} realizadas
+                      · {points(bonus)} realizada{penalty > 0 ? ` · ${points(-penalty)} no realizada` : ''} · {done} de {list.length} realizadas
                     </span>
                   </p>
                   {adding !== kind && (
@@ -109,7 +126,7 @@ export function ActivitiesSection({ memberId, period, admin, onScoreChanged, onE
           })}
         </ul>
       )}
-      {!admin && <p className="text-[11px] text-ink/50">Solo un administrador puede marcar una actividad como realizada o borrarla.</p>}
+      {!admin && <p className="text-[11px] text-ink/50">Solo un administrador puede marcar una actividad como realizada o no realizada, o borrarla.</p>}
     </div>
   );
 }
@@ -121,19 +138,19 @@ function ActivityRow({ activity, admin, run }: { activity: MemberActivity; admin
       <div className="flex shrink-0 items-center gap-1">
         {admin ? (
           <div className="flex overflow-hidden rounded-full border border-border" role="group" aria-label="Estado">
-            {[true, false].map((done) => (
+            {STATES.map((state) => (
               <button
-                key={String(done)}
+                key={String(state.done)}
                 type="button"
-                aria-pressed={activity.done === done}
-                disabled={activity.done === done}
-                onClick={() => void run(() => api(`/api/activities/${activity.id}`, 'PATCH', { done }))}
+                aria-pressed={activity.done === state.done}
+                disabled={activity.done === state.done}
+                onClick={() => void run(() => api(`/api/activities/${activity.id}`, 'PATCH', { done: state.done }))}
                 className={cn(
                   'px-2 py-0.5 text-[10px] font-semibold disabled:cursor-default',
-                  activity.done === done ? (done ? 'bg-emerald-600 text-white' : 'bg-ink/70 text-white') : 'text-ink/60 hover:bg-border/40',
+                  activity.done === state.done ? state.on : 'text-ink/60 hover:bg-border/40',
                 )}
               >
-                {done ? 'Realizada' : 'No realizada'}
+                {state.label}
               </button>
             ))}
           </div>
@@ -141,11 +158,15 @@ function ActivityRow({ activity, admin, run }: { activity: MemberActivity; admin
           <span
             className={cn(
               'flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
-              activity.done ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-border text-ink/60',
+              activity.done === true
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                : activity.done === false
+                  ? 'border-red-300 bg-red-50 text-red-800'
+                  : 'border-border text-ink/60',
             )}
           >
-            {activity.done && <Check className="size-3" aria-hidden />}
-            {activity.done ? 'Realizada' : 'No realizada'}
+            {activity.done === true && <Check className="size-3" aria-hidden />}
+            {STATES.find((s) => s.done === activity.done)?.label}
           </span>
         )}
         {admin && (

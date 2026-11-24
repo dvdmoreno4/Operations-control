@@ -16,7 +16,7 @@ export const GET = route<Context>(async (_req, { params }): Promise<{ activities
   return { activities: rows.map(activityFromRow) };
 });
 
-/** Registers an activity of a month as "no realizada"; an admin marks it done. */
+/** Registers an activity of a month as pending; an admin marks it done or not done. */
 export const POST = route<Context>(async (req, { params }) => {
   const memberId = parseUuid((await params).id, NOT_FOUND);
   const body = await jsonBody(req);
@@ -26,7 +26,7 @@ export const POST = route<Context>(async (req, { params }) => {
 
   const client = db();
   if (unwrap(await client.from('members').select('id').eq('id', memberId)).length === 0) throw new ApiError(404, NOT_FOUND);
-  const [row] = unwrap(await client.from('member_activities').insert({ member_id: memberId, period, kind: body.kind, description }).select('id'));
+  const [row] = unwrap(await client.from('member_activities').insert({ member_id: memberId, period, kind: body.kind, description, done: null }).select('id'));
   await recomputeActivityScore(memberId, period.slice(0, 7));
   return { id: row.id };
 });

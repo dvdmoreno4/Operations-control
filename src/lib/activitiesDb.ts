@@ -12,7 +12,7 @@ export function activityFromRow(row: Row): MemberActivity {
     period: String(row.period).slice(0, 7),
     kind: row.kind as MemberActivity['kind'],
     description: String(row.description ?? ''),
-    done: Boolean(row.done),
+    done: row.done === null || row.done === undefined ? null : Boolean(row.done),
     doneAt: row.done_at ? String(row.done_at) : null,
     createdAt: String(row.created_at),
   };
@@ -22,14 +22,11 @@ export function activityFromRow(row: Row): MemberActivity {
 export async function recomputeActivityScore(memberId: string, period: string) {
   const client = db();
   const rows = unwrap(await client.from('member_activities').select('period, kind, done').eq('member_id', memberId).eq('period', `${period}-01`)) as Row[];
-  const { bonus } = activityBonus(
-    rows.map((r) => ({ period: String(r.period).slice(0, 7), kind: r.kind as MemberActivity['kind'], done: Boolean(r.done) })),
-    period,
-  );
+  const { net } = activityBonus(rows.map(activityFromRow), period);
   unwrap(
     await client
       .from('kpi_records')
-      .upsert({ member_id: memberId, period: `${period}-01`, score_extra: bonus, updated_at: new Date().toISOString() })
+      .upsert({ member_id: memberId, period: `${period}-01`, score_extra: net, updated_at: new Date().toISOString() })
       .select('member_id'),
   );
 }
