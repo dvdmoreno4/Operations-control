@@ -15,7 +15,7 @@ const member = (id, stationId, departmentKey = null) => ({
 });
 
 test('a member counts for their own department, not their station', () => {
-  // NA-1 is a "Nuevo y Acciones" station; this member belongs to Gerencia.
+  // NA-1 is an "Acciones y Portafolios" station; this member belongs to Gerencia.
   const stats = stationStats([member('a', 'NA-1', 'gerencia'), member('b', 'NA-2')], []);
   const gerencia = statsOfDepartment(stats, 'gerencia').filter((s) => s.member);
   const nuevo = statsOfDepartment(stats, 'nuevo_acciones').filter((s) => s.member);

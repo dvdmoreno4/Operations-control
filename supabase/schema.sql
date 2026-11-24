@@ -18,7 +18,7 @@ create table if not exists departments (
 insert into departments (key, label, short, color) values
   ('ia_cfd', 'Departamento IA y CFD''s', 'IA y CFD''s', '#84cc16'),
   ('operadores_externos', 'Operadores externos', 'Op. externos', '#8b5cf6'),
-  ('nuevo_acciones', 'Departamento de Nuevo y Acciones', 'Nuevo y Acciones', '#14b8a6'),
+  ('nuevo_acciones', 'Departamento de Acciones y Portafolios', 'Acciones y Portafolios', '#14b8a6'),
   ('materias_primas', 'Departamento de Materias primas y coberturas', 'Materias primas', '#f97316'),
   ('mercados_internacionales', 'Departamento de Mercados Internacionales', 'Mercados Int.', '#eab308'),
   ('gerencia', 'Gerencia', 'Gerencia', '#6b7280')
@@ -381,3 +381,29 @@ create index if not exists project_collaborators_member_idx on project_collabora
 
 alter table member_requests enable row level security;
 alter table project_collaborators enable row level security;
+
+------------------------------------------------------------------------------------------------
+-- Migration 006 (also in supabase/migrations/006_actividades_extraordinarias.sql)
+------------------------------------------------------------------------------------------------
+
+-- Fourth segment of the total score (0-100): extraordinary activities of the month.
+alter table kpi_records add column if not exists score_extra numeric(5, 2) not null default 0 check (score_extra between 0 and 100);
+
+create table if not exists member_activities (
+  id uuid primary key default gen_random_uuid(),
+  member_id uuid not null references members (id) on delete cascade,
+  period date not null check (extract(day from period) = 1),   -- month of the activity
+  kind text not null check (kind in ('colaboracion_comercial', 'conversatorio', 'colaboracion_areas', 'proyecto_adicional')),
+  description text not null default '' check (length(description) <= 2000),
+  done boolean not null default false,                          -- realizada / no realizada
+  done_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists member_activities_member_idx on member_activities (member_id, period);
+
+alter table member_activities enable row level security;
+
+update departments
+set label = 'Departamento de Acciones y Portafolios', short = 'Acciones y Portafolios'
+where key = 'nuevo_acciones';

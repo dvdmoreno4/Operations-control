@@ -11,7 +11,8 @@ export type DepartmentKey =
 export const DEPARTMENTS: Record<DepartmentKey, { label: string; short: string; color: string }> = {
   ia_cfd: { label: "Departamento IA y CFD's", short: "IA y CFD's", color: '#84cc16' },
   operadores_externos: { label: 'Operadores externos', short: 'Op. externos', color: '#8b5cf6' },
-  nuevo_acciones: { label: 'Departamento de Nuevo y Acciones', short: 'Nuevo y Acciones', color: '#14b8a6' },
+  // Key kept for existing data; the department is now "Acciones y Portafolios".
+  nuevo_acciones: { label: 'Departamento de Acciones y Portafolios', short: 'Acciones y Portafolios', color: '#14b8a6' },
   materias_primas: { label: 'Departamento de Materias primas y coberturas', short: 'Materias primas', color: '#f97316' },
   mercados_internacionales: { label: 'Departamento de Mercados Internacionales', short: 'Mercados Int.', color: '#eab308' },
   gerencia: { label: 'Gerencia', short: 'Gerencia', color: '#6b7280' },
@@ -46,11 +47,11 @@ export const ZONES: Zone[] = [
     labelRotate: -90,
   },
   {
-    // Includes the former SUB-IA corner (station IA-11), which belongs to Nuevo y Acciones.
+    // Includes the former SUB-IA corner (station IA-11), which belongs to Acciones y Portafolios.
     id: 'nuevo',
     department: 'nuevo_acciones',
     points: '68,92 122,92 250,90 276,132 272,170 160,170 84,152 76,120',
-    label: 'NUEVO Y ACCIONES',
+    label: 'ACCIONES Y PORTAFOLIOS',
     labelX: 192,
     labelY: 124,
   },

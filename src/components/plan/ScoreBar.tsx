@@ -27,7 +27,7 @@ export function ScoreBar({ values }: { values: KpiValues }) {
           />
         ))}
       </div>
-      <ul className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {SCORE_SEGMENTS.map((segment) => (
           <li key={segment.key} className="rounded-lg border border-border px-3 py-2">
             <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-ink/60">

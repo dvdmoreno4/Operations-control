@@ -3,6 +3,7 @@ import { api } from '../../lib/apiClient';
 import { DEPARTMENT_KEYS, DEPARTMENTS, STATIONS, findStation } from '../../lib/floorplan';
 import { compliance, EMPTY_KPIS, memberDepartment, SCORE_SEGMENTS, totalScore, type KpiRecord, type KpiValues, type Member } from '../../lib/kpis';
 import { Field, inputClass, money, primaryButton, secondaryButton, SignedMoney, SignedPercent, TableFrame, Td, Th } from '../ui';
+import { ActivitiesSection } from './ActivitiesSection';
 import { IbReportSection } from './ib/IbReportSection';
 import { ProjectsSection } from './ProjectsSection';
 import { RequestsSection } from './RequestsSection';
@@ -161,6 +162,17 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
       )}
 
       <RequestsSection memberId={member.id} admin={admin} onChanged={onChanged} onError={onError} />
+
+      <ActivitiesSection
+        memberId={member.id}
+        period={period}
+        admin={admin}
+        onScoreChanged={async () => {
+          await loadRecords();
+          await onChanged();
+        }}
+        onError={onError}
+      />
 
       <IbReportSection
         memberId={member.id}
