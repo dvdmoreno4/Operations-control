@@ -1,4 +1,5 @@
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, FileText } from 'lucide-react';
+import { openReport } from '../../lib/reportLink';
 import { useId, useState, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { DEPARTMENTS, DEPARTMENT_KEYS, type DepartmentKey } from '../../lib/floorplan';
@@ -121,8 +122,18 @@ function DepartmentStats({ stats, department, onDepartment, mode, onMode, period
       </select>
     ) : null;
 
+  const reportPeriod = mode === 'semestral' ? semester : (period ?? new Date().toISOString().slice(0, 7));
   const aside = (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        className={cn(secondaryButton, 'flex items-center gap-1.5 py-1')}
+        onClick={() => openReport(department ? { kind: 'department', department } : { kind: 'all' }, reportPeriod)}
+        title={department ? `Informe de ${DEPARTMENTS[department].label}` : 'Informe de todos los departamentos'}
+      >
+        <FileText className="size-3.5" aria-hidden />
+        Informe
+      </button>
       <div className="flex overflow-hidden rounded-full border border-border text-[11px]" role="group" aria-label="Periodo">
         {(['mensual', 'semestral'] as const).map((m) => (
           <button

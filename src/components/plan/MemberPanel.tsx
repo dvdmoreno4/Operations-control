@@ -1,4 +1,5 @@
-import { FolderKanban, Gauge, Inbox, Monitor, Sparkles, TrendingUp } from 'lucide-react';
+import { FileText, FolderKanban, Gauge, Inbox, Monitor, Sparkles, TrendingUp } from 'lucide-react';
+import { openReport } from '../../lib/reportLink';
 import { SCREEN_HOURS_GOAL } from '../../lib/goals';
 import { ScreenTimeSection } from './ScreenTimeSection';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -159,6 +160,15 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
                 onChange={(e) => e.target.value && setPeriod(e.target.value)}
               />
             </label>
+            <button
+              type="button"
+              className={cn(secondaryButton, 'flex items-center gap-1.5')}
+              onClick={() => openReport({ kind: 'member', memberId: member.id }, period)}
+              title={`Informe de ${member.name}`}
+            >
+              <FileText className="size-3.5" aria-hidden />
+              Informe
+            </button>
             <button type="button" className={secondaryButton} onClick={() => setEditing(true)}>
               Editar
             </button>
