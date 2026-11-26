@@ -201,7 +201,7 @@ function MemberFile({ member, members, admin, onChanged, onError }: Shared & { m
           )}
         </Collapsible>
 
-        <Collapsible title="Resultados operativos · Interactive Brokers" icon={TrendingUp} summary={scoreChip(record?.scoreOperational)}>
+        <Collapsible title="Resultados operativos · IB y MetaTrader 5" icon={TrendingUp} summary={scoreChip(record?.scoreOperational)}>
           <IbReportSection memberId={member.id} onError={onError} onScored={refresh} />
         </Collapsible>
 

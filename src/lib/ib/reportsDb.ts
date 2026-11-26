@@ -2,6 +2,7 @@
 
 import { ApiError, db, unwrap } from '../api';
 import { ANNUAL_RETURN_GOAL_PCT } from '../goals';
+import { recomputeOperational } from '../operational';
 import { DOCUMENTS_BUCKET } from '../storage';
 import type { IbReportData } from './portfolioAnalyst';
 import { computeMetrics, operationalScore, recommendations, type ScoreSettings } from './score';
@@ -157,15 +158,8 @@ export async function saveReport(memberId: string, filePath: string, fileName: s
       if (rows.length) unwrap(await client.from(table).insert(rows).select('report_id'));
     }
 
-    // The operational score feeds the member's KPI of that month; other KPI fields are left as they are.
-    if (score.score !== null) {
-      unwrap(
-        await client
-          .from('kpi_records')
-          .upsert({ member_id: memberId, period, score_operational: score.score, updated_at: new Date().toISOString() })
-          .select('member_id'),
-      );
-    }
+    // The operational KPI of that month averages this report with an MT5 report of the same month, if any.
+    await recomputeOperational(memberId, metrics.month);
   } catch (error) {
     // Do not leave a half-saved report behind; child rows go with it (on delete cascade).
     await client.from('ib_reports').delete().eq('id', id);
@@ -337,22 +331,16 @@ async function rescore(detail: IbReportDetail): Promise<IbReportDetail> {
         .select('report_id'),
     );
   }
-  if (score.score !== null) {
-    unwrap(
-      await client
-        .from('kpi_records')
-        .upsert({ member_id: detail.memberId, period: `${metrics.month}-01`, score_operational: score.score, updated_at: new Date().toISOString() })
-        .select('member_id'),
-    );
-  }
+  await recomputeOperational(detail.memberId, metrics.month);
   return { ...detail, score: score.score, analytics, recommendations: recs };
 }
 
 export async function deleteReport(id: string) {
   const client = db();
-  const [report] = unwrap(await client.from('ib_reports').select('file_path').eq('id', id)) as Row[];
+  const [report] = unwrap(await client.from('ib_reports').select('file_path, member_id, period').eq('id', id)) as Row[];
   if (!report) throw new ApiError(404, REPORT_NOT_FOUND);
   const { error } = await client.storage.from(DOCUMENTS_BUCKET).remove([s(report.file_path)]);
   if (error) console.error(error.message);
   unwrap(await client.from('ib_reports').delete().eq('id', id).select('id'));
+  await recomputeOperational(s(report.member_id), s(report.period).slice(0, 7));
 }

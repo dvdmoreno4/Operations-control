@@ -4,6 +4,8 @@ import { api } from '../../../lib/apiClient';
 import { cn } from '../../../lib/cn';
 import type { Recommendation } from '../../../lib/ib/score';
 import type { IbReportDetail, IbReportListItem } from '../../../lib/ib/types';
+import type { Mt5ReportDetail, Mt5ReportListItem } from '../../../lib/mt5/types';
+import { Mt5ReportView } from '../mt5/Mt5ReportView';
 import { DOCUMENTS_BUCKET, MAX_UPLOAD_BYTES } from '../../../lib/storage';
 import { supabase } from '../../../lib/supabase';
 import { money, rowAction, secondaryButton, SignedMoney, TableFrame, Td, Th } from '../../ui';
@@ -17,18 +19,32 @@ const pct = (v: number | null | undefined, digits = 2) => (v === null || v === u
 const signedPct = (v: number | null | undefined) => (v === null || v === undefined ? '-' : `${v > 0 ? '+' : ''}${v.toFixed(2)}%`);
 const plain = (v: number | null | undefined) => (v === null || v === undefined ? '-' : money(v));
 
+type Kind = 'ib' | 'mt5';
+type ListEntry = { kind: Kind; id: string; period: string; fileName: string; score: number | null };
+const keyOf = (e: Pick<ListEntry, 'kind' | 'id'>) => `${e.kind}:${e.id}`;
+const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
 export function IbReportSection({ memberId, onError, onScored }: Props) {
-  const [reports, setReports] = useState<IbReportListItem[] | null>(null);
+  const [reports, setReports] = useState<ListEntry[] | null>(null);
+  /** "ib:<id>" or "mt5:<id>". */
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<IbReportDetail | null>(null);
+  const [mt5Detail, setMt5Detail] = useState<Mt5ReportDetail | null>(null);
   const [status, setStatus] = useState('');
   const input = useRef<HTMLInputElement>(null);
 
   const loadList = useCallback(async () => {
     try {
-      const list = (await api<{ reports: IbReportListItem[] }>(`/api/members/${memberId}/ib-reports`)).reports;
+      const [ib, mt5] = await Promise.all([
+        api<{ reports: IbReportListItem[] }>(`/api/members/${memberId}/ib-reports`),
+        api<{ reports: Mt5ReportListItem[] }>(`/api/members/${memberId}/mt5-reports`),
+      ]);
+      const list: ListEntry[] = [
+        ...ib.reports.map((r) => ({ kind: 'ib' as const, id: r.id, period: r.period, fileName: r.fileName, score: r.score })),
+        ...mt5.reports.map((r) => ({ kind: 'mt5' as const, id: r.id, period: r.period, fileName: r.fileName, score: r.score })),
+      ].sort((a, b) => b.period.localeCompare(a.period));
       setReports(list);
-      setSelected((current) => (current && list.some((r) => r.id === current) ? current : (list[0]?.id ?? null)));
+      setSelected((current) => (current && list.some((r) => keyOf(r) === current) ? current : list[0] ? keyOf(list[0]) : null));
     } catch (e) {
       onError(e);
     }
@@ -41,41 +57,58 @@ export function IbReportSection({ memberId, onError, onScored }: Props) {
   useEffect(() => {
     if (!selected) {
       setDetail(null);
+      setMt5Detail(null);
       return;
     }
     let active = true;
-    api<IbReportDetail>(`/api/reports/${selected}`)
-      .then((d) => {
-        if (!active) return;
-        setDetail(d);
-        // The server rescores old reports with the current goals; keep the list and the KPIs in step.
-        setReports((list) => {
-          const stale = list?.some((r) => r.id === d.id && r.score !== d.score);
-          if (stale) void onScored();
-          return list?.map((r) => (r.id === d.id ? { ...r, score: d.score } : r)) ?? list;
-        });
-      })
-      .catch(onError);
+    const [kind, id] = selected.split(':') as [Kind, string];
+    // The server rescores old reports with the current goals; keep the list and the KPIs in step.
+    const sync = (score: number | null) =>
+      setReports((list) => {
+        const stale = list?.some((r) => keyOf(r) === selected && r.score !== score);
+        if (stale) void onScored();
+        return list?.map((r) => (keyOf(r) === selected ? { ...r, score } : r)) ?? list;
+      });
+    if (kind === 'ib') {
+      api<IbReportDetail>(`/api/reports/${id}`)
+        .then((d) => {
+          if (!active) return;
+          setDetail(d);
+          sync(d.score);
+        })
+        .catch(onError);
+    } else {
+      api<Mt5ReportDetail>(`/api/mt5-reports/${id}`)
+        .then((d) => {
+          if (!active) return;
+          setMt5Detail(d);
+          sync(d.score);
+        })
+        .catch(onError);
+    }
     return () => {
       active = false;
     };
   }, [selected, onError, onScored]);
 
   async function upload(file: File) {
-    if (!/\.pdf$/i.test(file.name)) throw new Error('Sube el informe en PDF');
+    const isPdf = /\.pdf$/i.test(file.name);
+    if (!isPdf && !/\.xlsx$/i.test(file.name)) throw new Error('Sube el PDF de Interactive Brokers o el Excel (.xlsx) de MetaTrader 5');
     if (file.size > MAX_UPLOAD_BYTES) throw new Error('El archivo supera el máximo de 50 MB');
     if (!supabase) throw new Error('Falta configurar las claves públicas de Supabase');
-    setStatus('Subiendo el PDF...');
-    const { path, token } = await api<{ path: string; token: string }>(`/api/members/${memberId}/ib-reports/upload-url`, 'POST', {
+    setStatus('Subiendo el archivo...');
+    const { path, token, kind } = await api<{ path: string; token: string; kind: Kind }>(`/api/members/${memberId}/ib-reports/upload-url`, 'POST', {
       name: file.name,
       size: file.size,
     });
-    const { error } = await supabase.storage.from(DOCUMENTS_BUCKET).uploadToSignedUrl(path, token, file, { contentType: 'application/pdf' });
+    const { error } = await supabase.storage
+      .from(DOCUMENTS_BUCKET)
+      .uploadToSignedUrl(path, token, file, { contentType: isPdf ? 'application/pdf' : XLSX_TYPE });
     if (error) throw new Error(`No se pudo subir el archivo: ${error.message}`);
     setStatus('Leyendo el informe...');
-    const saved = await api<{ id: string }>(`/api/members/${memberId}/ib-reports`, 'POST', { path, name: file.name });
+    const saved = await api<{ id: string }>(`/api/members/${memberId}/${kind === 'ib' ? 'ib-reports' : 'mt5-reports'}`, 'POST', { path, name: file.name });
     await loadList();
-    setSelected(saved.id);
+    setSelected(keyOf({ kind, id: saved.id }));
     await onScored();
   }
 
@@ -89,28 +122,31 @@ export function IbReportSection({ memberId, onError, onScored }: Props) {
     }
   }
 
-  async function remove(report: IbReportListItem) {
-    if (!window.confirm(`¿Borrar el informe de ${report.period} (${report.fileName})?`)) return;
+  async function remove(report: ListEntry) {
+    if (!window.confirm(`¿Borrar el informe ${report.kind === 'ib' ? 'de Interactive Brokers' : 'de MetaTrader 5'} de ${report.period} (${report.fileName})?`)) return;
     try {
-      await api(`/api/reports/${report.id}`, 'DELETE');
+      await api(report.kind === 'ib' ? `/api/reports/${report.id}` : `/api/mt5-reports/${report.id}`, 'DELETE');
       await loadList();
+      await onScored();
     } catch (e) {
       onError(e);
     }
   }
 
+  const [selectedKind, selectedId] = (selected ?? ':').split(':');
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs text-ink/60">Informes PortfolioAnalyst subidos</span>
+        <span className="text-xs text-ink/60">Informes de Interactive Brokers y MetaTrader 5</span>
         <button type="button" className={cn(secondaryButton, 'flex items-center gap-1.5')} disabled={Boolean(status)} onClick={() => input.current?.click()}>
           <Upload className="size-3.5" aria-hidden />
-          {status || 'Subir informe PDF'}
+          {status || 'Subir informe (PDF IB o Excel MT5)'}
         </button>
         <input
           ref={input}
           type="file"
-          accept="application/pdf,.pdf"
+          accept={`application/pdf,.pdf,${XLSX_TYPE},.xlsx`}
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -120,8 +156,9 @@ export function IbReportSection({ memberId, onError, onScored }: Props) {
         />
       </div>
       <p className="text-xs text-ink/60">
-        Sube el informe <span className="font-semibold">PortfolioAnalyst</span> de Interactive Brokers (PDF, cualquier nombre y número de páginas). Se lee
-        automáticamente y su puntuación pasa a los KPIs del mes en que termina el informe.
+        Sube el informe <span className="font-semibold">PortfolioAnalyst</span> de Interactive Brokers (PDF) o el{' '}
+        <span className="font-semibold">Trade History Report</span> de MetaTrader 5 exportado a Excel (.xlsx), con cualquier nombre. Se leen
+        automáticamente; si en un mes hay de los dos, el KPI de resultados operativos es el promedio de ambos.
       </p>
 
       {reports === null ? (
@@ -131,17 +168,17 @@ export function IbReportSection({ memberId, onError, onScored }: Props) {
       ) : (
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Informes">
           {reports.map((r) => (
-            <span key={r.id} className="flex items-center">
+            <span key={keyOf(r)} className="flex items-center">
               <button
                 type="button"
-                onClick={() => setSelected(r.id)}
-                aria-pressed={selected === r.id}
+                onClick={() => setSelected(keyOf(r))}
+                aria-pressed={selected === keyOf(r)}
                 className={cn(
                   'rounded-l-full border px-2.5 py-1 text-[11px] tabular-nums',
-                  selected === r.id ? 'border-accent bg-accent text-bg' : 'border-border text-ink/70 hover:border-accent/60',
+                  selected === keyOf(r) ? 'border-accent bg-accent text-bg' : 'border-border text-ink/70 hover:border-accent/60',
                 )}
               >
-                {r.period} · {r.score ?? '-'} pts
+                <span className="font-semibold">{r.kind === 'ib' ? 'IB' : 'MT5'}</span> · {r.period} · {r.score ?? '-'} pts
               </button>
               <button type="button" onClick={() => void remove(r)} className={cn(rowAction, 'rounded-r-full border border-l-0 border-border px-1.5 py-1')} aria-label={`Borrar informe ${r.period}`}>
                 <Trash2 className="size-3" aria-hidden />
@@ -151,12 +188,13 @@ export function IbReportSection({ memberId, onError, onScored }: Props) {
         </div>
       )}
 
-      {detail && detail.id === selected && <ReportView report={detail} />}
+      {selectedKind === 'ib' && detail && detail.id === selectedId && <ReportView report={detail} />}
+      {selectedKind === 'mt5' && mt5Detail && mt5Detail.id === selectedId && <Mt5ReportView report={mt5Detail} />}
     </div>
   );
 }
 
-function Stat({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+export function Stat({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <div className="rounded-lg border border-border px-3 py-2">
       <div className="text-[10px] font-mono uppercase tracking-wider text-ink/60">{label}</div>
@@ -166,7 +204,7 @@ function Stat({ label, children, hint }: { label: string; children: ReactNode; h
   );
 }
 
-function Block({ title, children }: { title: string; children: ReactNode }) {
+export function Block({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-2">
       <h5 className="text-[10px] font-mono uppercase tracking-wider text-ink/60">{title}</h5>
@@ -175,7 +213,7 @@ function Block({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-const SEVERITY: Record<Recommendation['severity'], { label: string; icon: typeof Info; className: string }> = {
+export const SEVERITY: Record<Recommendation['severity'], { label: string; icon: typeof Info; className: string }> = {
   critico: { label: 'Crítico', icon: AlertOctagon, className: 'border-red-300 bg-red-50 text-red-900' },
   aviso: { label: 'Aviso', icon: AlertTriangle, className: 'border-amber-300 bg-amber-50 text-amber-900' },
   info: { label: 'Info', icon: Info, className: 'border-border bg-surface text-ink' },

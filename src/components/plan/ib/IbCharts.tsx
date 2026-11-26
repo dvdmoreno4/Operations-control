@@ -177,19 +177,23 @@ export function MonthlyReturnsChart({ months }: { months: MonthlyReturn[] }) {
     return <rect x={x} y={top} width={barW} height={h} rx={Math.min(4, barW / 2)} fill={color} />;
   };
   const hovered = hover === null ? null : data[hover];
+  // MetaTrader 5 reports have no benchmark: a single series needs no legend.
+  const hasBenchmark = data.some((m) => m.benchmarks.SPXTR != null);
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-4 text-[11px] text-ink/70" aria-hidden>
-        <span className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-sm" style={{ backgroundColor: SERIES_ACCOUNT }} />
-          Cuenta
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-sm" style={{ backgroundColor: SERIES_BENCHMARK }} />
-          S&P 500 (SPXTR)
-        </span>
-      </div>
+      {hasBenchmark && (
+        <div className="flex flex-wrap gap-4 text-[11px] text-ink/70" aria-hidden>
+          <span className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-sm" style={{ backgroundColor: SERIES_ACCOUNT }} />
+            Cuenta
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-sm" style={{ backgroundColor: SERIES_BENCHMARK }} />
+            S&P 500 (SPXTR)
+          </span>
+        </div>
+      )}
       <div className="relative">
         <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label="Retorno mensual de la cuenta frente al S&P 500" onPointerLeave={() => setHover(null)}>
           {geometry.ticks.map((t) => (
@@ -206,8 +210,8 @@ export function MonthlyReturnsChart({ months }: { months: MonthlyReturn[] }) {
               <g key={m.month} onPointerEnter={() => setHover(i)}>
                 <rect x={cx - geometry.slot / 2} y={PAD.top} width={geometry.slot} height={H - PAD.top - PAD.bottom} fill="transparent" />
                 {hover === i && <rect x={cx - geometry.slot / 2} y={PAD.top} width={geometry.slot} height={H - PAD.top - PAD.bottom} fill="#f3f4f6" />}
-                {bar(m.account, cx - barW - 1, SERIES_ACCOUNT)}
-                {bar(m.benchmarks.SPXTR ?? null, cx + 1, SERIES_BENCHMARK)}
+                {bar(m.account, hasBenchmark ? cx - barW - 1 : cx - barW / 2, SERIES_ACCOUNT)}
+                {hasBenchmark && bar(m.benchmarks.SPXTR ?? null, cx + 1, SERIES_BENCHMARK)}
                 <text x={cx} y={H - 6} textAnchor="middle" fontSize={10} fill={AXIS_TEXT}>
                   {monthLabel(m.month)}
                 </text>
@@ -219,13 +223,17 @@ export function MonthlyReturnsChart({ months }: { months: MonthlyReturn[] }) {
           <Tooltip x={((PAD.left + geometry.slot * (hover + 0.5)) / W) * 100} y={30}>
             <div className="text-ink/60 capitalize">{monthLabel(hovered.month)}</div>
             <div className="tabular-nums">Cuenta: {signedPct(hovered.account)}</div>
-            <div className="tabular-nums">S&P 500: {signedPct(hovered.benchmarks.SPXTR ?? null)}</div>
+            {hasBenchmark && <div className="tabular-nums">S&P 500: {signedPct(hovered.benchmarks.SPXTR ?? null)}</div>}
           </Tooltip>
         )}
       </div>
       <DataTable
-        head={['Mes', 'Cuenta', 'S&P 500', 'EFA', 'VT']}
-        rows={data.map((m) => [m.month, signedPct(m.account), signedPct(m.benchmarks.SPXTR ?? null), signedPct(m.benchmarks.EFA ?? null), signedPct(m.benchmarks.VT ?? null)])}
+        head={hasBenchmark ? ['Mes', 'Cuenta', 'S&P 500', 'EFA', 'VT'] : ['Mes', 'Retorno']}
+        rows={data.map((m) =>
+          hasBenchmark
+            ? [m.month, signedPct(m.account), signedPct(m.benchmarks.SPXTR ?? null), signedPct(m.benchmarks.EFA ?? null), signedPct(m.benchmarks.VT ?? null)]
+            : [m.month, signedPct(m.account)],
+        )}
       />
     </div>
   );
