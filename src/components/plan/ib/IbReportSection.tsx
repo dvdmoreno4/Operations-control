@@ -45,12 +45,21 @@ export function IbReportSection({ memberId, onError, onScored }: Props) {
     }
     let active = true;
     api<IbReportDetail>(`/api/reports/${selected}`)
-      .then((d) => active && setDetail(d))
+      .then((d) => {
+        if (!active) return;
+        setDetail(d);
+        // The server rescores old reports with the current goals; keep the list and the KPIs in step.
+        setReports((list) => {
+          const stale = list?.some((r) => r.id === d.id && r.score !== d.score);
+          if (stale) void onScored();
+          return list?.map((r) => (r.id === d.id ? { ...r, score: d.score } : r)) ?? list;
+        });
+      })
       .catch(onError);
     return () => {
       active = false;
     };
-  }, [selected, onError]);
+  }, [selected, onError, onScored]);
 
   async function upload(file: File) {
     if (!/\.pdf$/i.test(file.name)) throw new Error('Sube el informe en PDF');

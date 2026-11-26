@@ -226,7 +226,7 @@ export async function loadReport(id: string): Promise<IbReportDetail> {
     ])
   ).map((result) => unwrap(result) as Row[]);
 
-  return {
+  const detail: IbReportDetail = {
     ...listItem(report),
     memberId: s(report.member_id),
     accountName: s(report.account_name),
@@ -282,6 +282,70 @@ export async function loadReport(id: string): Promise<IbReportDetail> {
       data: (r.data as Record<string, unknown>) ?? {},
     })),
   };
+  return rescore(detail);
+}
+
+/**
+ * Recomputes a stored report's score and recommendations with the current goals (e.g. reports
+ * uploaded before the 25% annual return goal). When anything changed it saves the new score,
+ * recommendations and the month's operational KPI, so old reports update without a new upload.
+ */
+async function rescore(detail: IbReportDetail): Promise<IbReportDetail> {
+  const data: IbReportData = {
+    accountName: detail.accountName,
+    accountId: detail.accountId,
+    accountType: detail.accountType,
+    baseCurrency: detail.baseCurrency,
+    periodStart: detail.periodStart ?? '',
+    periodEnd: detail.periodEnd ?? `${detail.period}-01`,
+    summary: detail.analytics.summary,
+    returns: detail.analytics.returns,
+    monthlyReturns: detail.monthlyReturns,
+    risk: detail.analytics.risk,
+    positions: detail.positions,
+    navDaily: detail.navDaily,
+    symbols: detail.symbols,
+    trades: detail.trades,
+    warnings: detail.warnings,
+  };
+  const settings = await loadScoreSettings();
+  const metrics = computeMetrics(data);
+  const score = operationalScore(data, metrics, settings);
+  const recs = recommendations(data, metrics, settings);
+
+  const unchanged =
+    score.score === detail.score &&
+    JSON.stringify(score.parts) === JSON.stringify(detail.analytics.scoreParts) &&
+    JSON.stringify(recs.map((r) => r.message)) === JSON.stringify(detail.recommendations.map((r) => r.message));
+  if (unchanged) return detail;
+
+  const analytics: IbReportAnalytics = { ...detail.analytics, metrics, scoreParts: score.parts };
+  const client = db();
+  unwrap(
+    await client
+      .from('ib_reports')
+      .update({ score: score.score, score_detail: Object.fromEntries(score.parts.map((p) => [p.key, p.score])), analytics })
+      .eq('id', detail.id)
+      .select('id'),
+  );
+  unwrap(await client.from('ib_recommendations').delete().eq('report_id', detail.id).select('report_id'));
+  if (recs.length) {
+    unwrap(
+      await client
+        .from('ib_recommendations')
+        .insert(recs.map((r) => ({ report_id: detail.id, code: r.code, severity: r.severity, message: r.message, data: r.data })))
+        .select('report_id'),
+    );
+  }
+  if (score.score !== null) {
+    unwrap(
+      await client
+        .from('kpi_records')
+        .upsert({ member_id: detail.memberId, period: `${metrics.month}-01`, score_operational: score.score, updated_at: new Date().toISOString() })
+        .select('member_id'),
+    );
+  }
+  return { ...detail, score: score.score, analytics, recommendations: recs };
 }
 
 export async function deleteReport(id: string) {
